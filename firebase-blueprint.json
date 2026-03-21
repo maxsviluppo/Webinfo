@@ -22,7 +22,10 @@
         "newsId": { "type": "string" },
         "title": { "type": "string" },
         "summary": { "type": "string" },
+        "category": { "type": "string" },
         "imageUrl": { "type": "string" },
+        "url": { "type": "string" },
+        "source": { "type": "string" },
         "createdAt": { "type": "string", "format": "date-time" },
         "expiresAt": { "type": "string", "format": "date-time" }
       },

@@ -5,7 +5,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Newspaper, TrendingUp, Clock, Share2, ExternalLink, Menu, X, Settings, User as UserIcon, Heart, LogOut, BookOpen, LayoutGrid, Globe, Cpu, Music, Gamepad2, Palette, FlaskConical, Search } from 'lucide-react';
+import { Newspaper, TrendingUp, Clock, Share2, ExternalLink, Menu, X, Settings, User as UserIcon, Heart, LogOut, BookOpen, LayoutGrid, Globe, Cpu, Music, Gamepad2, Palette, FlaskConical, Search, RefreshCw } from 'lucide-react';
 import { auth, loginWithGoogle, logout, onAuthStateChanged, db, handleFirestoreError, OperationType, User } from './firebase';
 import { collection, doc, setDoc, deleteDoc, onSnapshot, query, where, Timestamp, getDoc } from 'firebase/firestore';
 
@@ -16,6 +16,8 @@ interface NewsItem {
   category: string;
   time: string;
   imageUrl: string;
+  url: string;
+  source: string;
 }
 
 const variants = {
@@ -56,70 +58,39 @@ const variants = {
   })
 };
 
-const STATIC_NEWS: NewsItem[] = [
-  { 
-    id: '1', 
-    title: 'Esplorazione Urbana: I Segreti delle Grandi Metropoli', 
-    summary: 'Un viaggio attraverso le architetture nascoste e le storie dimenticate delle città più iconiche del mondo, dalla New York sotterranea ai tetti di Parigi.', 
-    category: 'Cultura', 
-    time: '2 ore fa',
-    imageUrl: 'https://picsum.photos/seed/city/1600/900'
-  },
-  { 
-    id: '2', 
-    title: 'Innovazione Sostenibile: Il Futuro del Design', 
-    summary: 'Come i nuovi materiali biodegradabili e le tecniche di stampa 3D stanno rivoluzionando il modo in cui pensiamo agli oggetti quotidiani e all\'arredamento.', 
-    category: 'Tecnologia', 
-    time: '4 ore fa',
-    imageUrl: 'https://picsum.photos/seed/design/1600/900'
-  },
-  { 
-    id: '3', 
-    title: 'Sinfonie Digitali: La Nuova Era della Composizione', 
-    summary: 'Musicisti e programmatori collaborano per creare esperienze sonore immersive che sfidano i confini tra analogico e digitale, portando la musica in una nuova dimensione.', 
-    category: 'Musica', 
-    time: '6 ore fa',
-    imageUrl: 'https://picsum.photos/seed/concert/1600/900'
-  },
-  { 
-    id: '4', 
-    title: 'L\'Arte del Minimalismo nel Ventesimo Secolo', 
-    summary: 'Un\'analisi approfondita di come la semplicità sia diventata una forma d\'espressione potente, influenzando pittura, scultura e stile di vita moderno.', 
-    category: 'Arte', 
-    time: '8 ore fa',
-    imageUrl: 'https://picsum.photos/seed/art/1600/900'
-  },
-  { 
-    id: '5', 
-    title: 'Oltre i Confini: Nuove Scoperte in Astrofisica', 
-    summary: 'Le ultime osservazioni dei telescopi spaziali rivelano dettagli senza precedenti sulla formazione delle galassie e sulla natura della materia oscura.', 
-    category: 'Scienza', 
-    time: '12 ore fa',
-    imageUrl: 'https://picsum.photos/seed/space/1600/900'
-  },
-  { 
-    id: '6', 
-    title: 'Il Fascino dei Videogiochi Indie', 
-    summary: 'Perché i piccoli studi di sviluppo stanno conquistando il cuore dei giocatori con narrazioni profonde e meccaniche di gioco innovative e sperimentali.', 
-    category: 'Gaming', 
-    time: '1 giorno fa',
-    imageUrl: 'https://picsum.photos/seed/gaming/1600/900'
-  }
+const FEEDS = [
+  { url: "MOCK_BREAKING", cat: "Cronaca", name: "Ultima Ora" },
+  { url: "https://www.ansa.it/sito/ansait_rss.xml", cat: "Cronaca", name: "ANSA" },
+  { url: "https://www.tgcom24.mediaset.it/rss/homepage.xml", cat: "Cronaca", name: "TGCOM24" },
+  { url: "https://www.adnkronos.com/rss/home", cat: "Cronaca", name: "Adnkronos" },
+  { url: "https://www.reuters.com/arc/outboundfeeds/rss/category/world/?outputType=xml", cat: "Mondo", name: "Reuters" },
+  { url: "https://feeds.bbci.co.uk/news/world/rss.xml", cat: "Mondo", name: "BBC News" },
+  { url: "https://www.wired.it/feed/", cat: "Tecnologia", name: "Wired IT" },
+  { url: "https://www.punto-informatico.it/feed/", cat: "Tecnologia", name: "Punto Informatico" },
+  { url: "https://leganerd.com/feed/", cat: "Tecnologia", name: "Lega Nerd" },
+  { url: "https://www.eurogamer.it/feed/news", cat: "Gaming", name: "Eurogamer" },
+  { url: "https://it.ign.com/feed.xml", cat: "Gaming", name: "IGN Italia" },
+  { url: "https://www.gazzetta.it/rss/home.xml", cat: "Sport", name: "Gazzetta" },
+  { url: "https://www.tuttosport.com/rss/calcio", cat: "Sport", name: "TuttoSport" },
+  { url: "https://www.focus.it/rss", cat: "Scienza", name: "Focus" },
+  { url: "https://www.artribune.com/feed/", cat: "Cultura", name: "Artribune" },
+  { url: "https://www.minimaetmoralia.it/wp/feed/", cat: "Cultura", name: "Minima&Moralia" }
 ];
 
 const CATEGORIES = [
   { id: 'all', label: 'Tutte', icon: Globe, color: 'bg-indigo-600', border: 'border-indigo-400/30' },
-  { id: 'scienza', label: 'Scienza', icon: FlaskConical, color: 'bg-emerald-600', border: 'border-emerald-400/30' },
-  { id: 'tecnologia', label: 'Tech', icon: Cpu, color: 'bg-blue-600', border: 'border-blue-400/30' },
-  { id: 'musica', label: 'Musica', icon: Music, color: 'bg-purple-600', border: 'border-purple-400/30' },
+  { id: 'cronaca', label: 'Cronaca', icon: BookOpen, color: 'bg-slate-700', border: 'border-slate-500/30' },
+  { id: 'mondo', label: 'Mondo', icon: Globe, color: 'bg-blue-500', border: 'border-blue-400/30' },
+  { id: 'tecnologia', label: 'Tecnologia', icon: Cpu, color: 'bg-blue-600', border: 'border-blue-400/30' },
   { id: 'gaming', label: 'Gaming', icon: Gamepad2, color: 'bg-orange-600', border: 'border-orange-400/30' },
-  { id: 'arte', label: 'Arte', icon: Palette, color: 'bg-pink-600', border: 'border-pink-400/30' },
   { id: 'sport', label: 'Sport', icon: TrendingUp, color: 'bg-red-600', border: 'border-red-400/30' },
-  { id: 'politica', label: 'Politica', icon: BookOpen, color: 'bg-slate-700', border: 'border-slate-500/30' },
+  { id: 'scienza', label: 'Scienza', icon: FlaskConical, color: 'bg-emerald-600', border: 'border-emerald-400/30' },
+  { id: 'cultura', label: 'Cultura', icon: Palette, color: 'bg-pink-600', border: 'border-pink-400/30' },
 ];
 
 export default function App() {
-  const [newsItems] = useState<NewsItem[]>(STATIC_NEWS);
+  const [newsItems, setNewsItems] = useState<NewsItem[]>([]);
+  const [loading, setLoading] = useState(true);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [direction, setDirection] = useState(0);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
@@ -135,6 +106,17 @@ export default function App() {
 
   const selectedCategoryData = CATEGORIES.find(c => c.id === selectedCategory);
   const SelectedCategoryIcon = selectedCategoryData?.icon;
+
+  // Reset to home view after login/logout
+  useEffect(() => {
+    setSelectedCategory('all');
+    setShowFavoritesOnly(false);
+    setIsMenuOpen(false);
+    setCurrentIndex(0);
+    setSearchQuery('');
+    setIsSearchOpen(false);
+    setIsCategoryMenuOpen(false);
+  }, [user]);
 
   // Auth Listener
   useEffect(() => {
@@ -195,6 +177,172 @@ export default function App() {
     return () => unsubscribe();
   }, [user]);
 
+  // Fetch Real News Feeds
+  const fetchSingleFeed = async (feed: typeof FEEDS[0]) => {
+    if (feed.url === "MOCK_BREAKING") {
+      return [
+        {
+          id: `breaking-1-${Date.now()}`,
+          title: "Benvenuto su NewsHub Italia",
+          url: "#",
+          summary: "Stiamo caricando le ultime notizie dai principali quotidiani italiani e internazionali. Scorri per scoprire le novità in tempo reale.",
+          category: "Cronaca",
+          source: "NewsHub",
+          imageUrl: "https://picsum.photos/seed/newshub/1600/900",
+          time: "Adesso"
+        },
+        {
+          id: `breaking-2-${Date.now()}`,
+          title: "Aggiornamento Feed in corso",
+          url: "#",
+          summary: "Il nostro sistema sta interrogando ANSA, Reuters, Wired e altre 15 fonti per offrirti una panoramica completa.",
+          category: "Tecnologia",
+          source: "Sistema",
+          imageUrl: "https://picsum.photos/seed/tech/1600/900",
+          time: "In corso"
+        }
+      ];
+    }
+
+    const proxies = [
+      (url: string) => `https://corsproxy.io/?${encodeURIComponent(url)}`,
+      (url: string) => `https://corsproxy.org/?${encodeURIComponent(url)}`,
+      (url: string) => `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`,
+      (url: string) => `https://api.codetabs.com/v1/proxy?url=${encodeURIComponent(url)}`,
+      (url: string) => `https://api.allorigins.win/get?url=${encodeURIComponent(url)}`,
+      (url: string) => `https://thingproxy.freeboard.io/fetch/${url}`,
+    ];
+
+    for (const getProxyUrl of proxies) {
+      try {
+        const proxyUrl = getProxyUrl(feed.url);
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 8000); // 8 seconds timeout
+
+        const response = await fetch(proxyUrl, { signal: controller.signal });
+        clearTimeout(timeoutId);
+
+        if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+        
+        let xmlText = "";
+        if (proxyUrl.includes('allorigins.win/get')) {
+          const data = await response.json();
+          xmlText = data.contents;
+        } else {
+          xmlText = await response.text();
+        }
+
+        if (!xmlText) throw new Error("Empty response");
+        
+        const lowerText = xmlText.toLowerCase();
+        if (lowerText.includes("access denied") || lowerText.includes("forbidden") || lowerText.includes("blocked by cloudflare")) {
+          throw new Error("Request blocked by source or proxy");
+        }
+
+        const parser = new DOMParser();
+        const xmlDoc = parser.parseFromString(xmlText, "text/xml");
+        if (!xmlDoc.documentElement) throw new Error("Invalid XML document");
+        
+        const parseError = xmlDoc.getElementsByTagName("parsererror");
+        if (parseError.length > 0) throw new Error("XML parsing error");
+
+        const items = Array.from(xmlDoc.querySelectorAll("item, entry")).slice(0, 10);
+
+        const parsedItems: NewsItem[] = items.map((item, idx) => {
+          const title = item.querySelector("title")?.textContent || "Senza Titolo";
+          let link = item.querySelector("link")?.textContent || "#";
+          if (link === "#" || link.trim() === "") {
+            link = item.querySelector("link")?.getAttribute("href") || "#";
+          }
+
+          const desc = item.querySelector("description")?.textContent || 
+                       item.querySelector("summary")?.textContent || 
+                       item.querySelector("content")?.textContent || "";
+          
+          const imgRegex = /<img[^>]+src="([^">]+)"/;
+          const foundImg = desc.match(imgRegex);
+          const enclosure = item.querySelector("enclosure")?.getAttribute("url");
+          const mediaContent = item.querySelector("content")?.getAttribute("url");
+          
+          const thumb = enclosure || mediaContent || (foundImg ? foundImg[1] : `https://picsum.photos/seed/${feed.cat.toLowerCase()}-${idx}/1600/900`);
+
+          const pubDate = item.querySelector("pubDate")?.textContent || 
+                          item.querySelector("published")?.textContent || 
+                          item.querySelector("updated")?.textContent;
+          
+          const time = pubDate ? new Date(pubDate).toLocaleDateString('it-IT', { hour: '2-digit', minute: '2-digit' }) : "Recentemente";
+
+          return {
+            id: `${feed.name}-${idx}-${Date.now()}`,
+            title: title,
+            url: link,
+            summary: desc.replace(/<[^>]*>?/gm, '').substring(0, 150) + "...",
+            category: feed.cat,
+            source: feed.name,
+            imageUrl: thumb,
+            time: time
+          };
+        });
+        
+        return parsedItems;
+      } catch (e) {
+        // Continue to next proxy
+      }
+    }
+
+    // Fallback mock data if all proxies fail
+    return Array.from({ length: 2 }).map((_, idx) => ({
+      id: `fallback-${feed.name}-${idx}-${Date.now()}`,
+      title: `Anteprima: ${feed.name} - Aggiornamento ${idx + 1}`,
+      url: feed.url,
+      summary: `Il feed di ${feed.name} è temporaneamente non raggiungibile. Clicca per visitare il sito originale.`,
+      category: feed.cat,
+      source: feed.name,
+      imageUrl: `https://picsum.photos/seed/${feed.cat.toLowerCase()}-${idx}/1600/900`,
+      time: "In attesa"
+    }));
+  };
+
+  const fetchAllFeeds = async () => {
+    setLoading(true);
+    setNewsItems([]); // Clear existing items on manual refresh
+    
+    // 1. Fetch the mock breaking feed first to show something immediately (Instant)
+    const breakingItems = await fetchSingleFeed(FEEDS[0]);
+    setNewsItems(breakingItems);
+    
+    // 2. Fetch ANSA immediately after (Usually very fast and reliable)
+    const ansaItems = await fetchSingleFeed(FEEDS[1]);
+    setNewsItems(prev => {
+      const existingIds = new Set(prev.map(i => i.id));
+      const newItems = ansaItems.filter(i => !existingIds.has(i.id));
+      return [...prev, ...newItems];
+    });
+
+    // 3. Fetch the rest in parallel
+    const otherFeeds = FEEDS.slice(2);
+    const promises = otherFeeds.map(async (feed) => {
+      const items = await fetchSingleFeed(feed);
+      setNewsItems(prev => {
+        const existingIds = new Set(prev.map(i => i.id));
+        const newItems = items.filter(i => !existingIds.has(i.id));
+        return [...prev, ...newItems].sort((a, b) => {
+          // Keep breaking news at the top if possible, otherwise randomize
+          if (a.id.startsWith('breaking')) return -1;
+          if (b.id.startsWith('breaking')) return 1;
+          return 0.5 - Math.random();
+        });
+      });
+    });
+
+    await Promise.allSettled(promises);
+    setLoading(false);
+  };
+
+  useEffect(() => {
+    fetchAllFeeds();
+  }, []);
+
   const toggleFavorite = async (news: NewsItem) => {
     if (!user) {
       loginWithGoogle();
@@ -217,7 +365,10 @@ export default function App() {
           newsId: news.id,
           title: news.title,
           summary: news.summary,
+          category: news.category,
           imageUrl: news.imageUrl,
+          url: news.url,
+          source: news.source,
           createdAt: now,
           expiresAt: expiresAt
         });
@@ -229,22 +380,27 @@ export default function App() {
 
   const paginate = (newDirection: number) => {
     const nextIndex = currentIndex + newDirection;
-    if (nextIndex >= 0 && nextIndex < newsItems.length) {
+    if (nextIndex >= 0 && nextIndex < displayedNews.length) {
       setDirection(newDirection);
       setCurrentIndex(nextIndex);
     }
   };
 
-  const currentNews = newsItems[currentIndex];
-  const displayedNews = (showFavoritesOnly ? Object.values(favorites) : newsItems)
+  const displayedNews = (showFavoritesOnly 
+    ? Object.values(favorites).sort((a: any, b: any) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0)) 
+    : newsItems)
     .filter(item => {
+      // If showing favorites, we might want to see all of them regardless of category
+      // but let's keep the category filter if the user explicitly selected one.
+      // However, the user request suggests they expect to see their favorites when they click the heart.
+      const category = item.category || 'Generale';
       const matchesCategory = selectedCategory === 'all' || 
-        item.category.toLowerCase().includes(selectedCategory.toLowerCase()) || 
-        selectedCategory.toLowerCase().includes(item.category.toLowerCase());
+        category.toLowerCase().includes(selectedCategory.toLowerCase()) || 
+        selectedCategory.toLowerCase().includes(category.toLowerCase());
       
       const matchesSearch = !searchQuery || 
-        item.title.toLowerCase().includes(searchQuery.toLowerCase()) || 
-        item.summary.toLowerCase().includes(searchQuery.toLowerCase());
+        (item.title && item.title.toLowerCase().includes(searchQuery.toLowerCase())) || 
+        (item.summary && item.summary.toLowerCase().includes(searchQuery.toLowerCase()));
 
       return matchesCategory && matchesSearch;
     });
@@ -292,8 +448,8 @@ export default function App() {
                       show: {
                         opacity: 1,
                         transition: {
-                          staggerChildren: 0.08,
-                          delayChildren: 0.05
+                          staggerChildren: 0.1,
+                          delayChildren: 0.1
                         }
                       },
                       exit: {
@@ -311,6 +467,11 @@ export default function App() {
                   >
                     {[
                       { 
+                        icon: RefreshCw, 
+                        label: 'Aggiorna', 
+                        action: fetchAllFeeds 
+                      },
+                      { 
                         icon: LayoutGrid, 
                         label: 'Categorie', 
                         action: () => setIsCategoryMenuOpen(!isCategoryMenuOpen)
@@ -318,7 +479,16 @@ export default function App() {
                       { 
                         icon: Heart, 
                         label: showFavoritesOnly ? 'Tutte' : 'Preferiti', 
-                        action: () => setShowFavoritesOnly(!showFavoritesOnly)
+                        isActive: showFavoritesOnly,
+                        action: () => {
+                          const nextVal = !showFavoritesOnly;
+                          setShowFavoritesOnly(nextVal);
+                          if (nextVal) {
+                            setSelectedCategory('all');
+                            setCurrentIndex(0);
+                            setSearchQuery('');
+                          }
+                        }
                       },
                       { 
                         icon: Share2, 
@@ -344,43 +514,49 @@ export default function App() {
                       { 
                         icon: user ? LogOut : UserIcon, 
                         label: user ? 'Logout' : 'Profilo', 
+                        isActive: !!user,
                         action: user ? logout : loginWithGoogle 
                       },
                     ].map((item, i) => (
-                      <motion.div 
-                        key={i} 
-                        variants={{
-                          hidden: { opacity: 0, scale: 0.5, y: 20 },
-                          show: { 
-                            opacity: 1, 
-                            scale: 1, 
-                            y: 0,
-                            transition: { type: "spring", stiffness: 300, damping: 25 }
-                          },
-                          exit: { 
-                            opacity: 0, 
-                            scale: 0.5, 
-                            y: 20,
-                            transition: { duration: 0.2 }
-                          }
-                        }}
-                        animate={isSearchOpen && item.label !== 'Cerca' ? { opacity: 0, scale: 0.8, pointerEvents: 'none' } : 'show'}
-                        className="relative group flex justify-end"
-                      >
+                        <motion.div 
+                          key={i} 
+                          variants={{
+                            hidden: { opacity: 0, scale: 0.3, x: 50, rotate: -15 },
+                            show: { 
+                              opacity: 1, 
+                              scale: 1, 
+                              x: 0,
+                              rotate: 0,
+                              transition: { 
+                                type: "spring", 
+                                stiffness: 400, 
+                                damping: 28,
+                                mass: 0.8
+                              }
+                            },
+                            exit: { 
+                              opacity: 0, 
+                              scale: 0.5, 
+                              x: 20,
+                              transition: { duration: 0.2, ease: "easeIn" }
+                            }
+                          }}
+                          className="relative group flex justify-end"
+                        >
                         <motion.button
                           whileHover={{ scale: 1.15, x: -5 }}
                           whileTap={{ scale: 0.9 }}
                           onClick={() => { item.action(); if (item.label !== 'Categorie') setIsMenuOpen(false); }}
                           className={`w-12 h-12 rounded-full flex items-center justify-center backdrop-blur-xl border border-white/20 shadow-2xl transition-all relative ${
-                            (item.label === 'Preferiti' && showFavoritesOnly) 
+                            (item.isActive) 
                               ? 'bg-indigo-500/40 border-indigo-400/50 text-white' 
                               : (item.label === 'Categorie' && isCategoryMenuOpen)
                                 ? `${selectedCategoryData?.color.replace('bg-', 'bg-')}/40 border-indigo-400/50 text-white`
                                 : 'bg-white/10 text-white/80 hover:bg-white/20 hover:text-white'
                           } ${isCategoryMenuOpen && item.label !== 'Categorie' ? 'opacity-20' : 'opacity-100'}`}
                         >
-                          <motion.div layoutId={item.label === 'Preferiti' && showFavoritesOnly ? "active-fav-icon" : undefined}>
-                            <item.icon className="w-5 h-5" />
+                          <motion.div layoutId={item.isActive ? "active-menu-icon" : undefined}>
+                            <item.icon className={`w-5 h-5 ${item.isActive ? 'fill-current' : ''}`} />
                           </motion.div>
                           <span className="absolute right-full mr-4 px-3 py-1 rounded-lg bg-slate-900/90 text-white text-[10px] font-medium opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap border border-white/10">
                             {item.label}
@@ -454,7 +630,11 @@ export default function App() {
                     {isSearchOpen ? (
                       <motion.div 
                         layoutId="search-bubble"
-                        className="h-12 bg-white/10 backdrop-blur-xl border border-white/20 rounded-full flex items-center px-4 shadow-2xl w-[260px]"
+                        initial={{ width: 48, opacity: 0 }}
+                        animate={{ width: 260, opacity: 1 }}
+                        exit={{ width: 48, opacity: 0 }}
+                        transition={{ type: "spring", stiffness: 300, damping: 30 }}
+                        className="h-12 bg-white/10 backdrop-blur-xl border border-white/20 rounded-full flex items-center px-4 shadow-[0_0_20px_rgba(255,255,255,0.1)] overflow-hidden"
                       >
                         <Search className="w-5 h-5 text-white/60 mr-2 shrink-0" />
                         <input
@@ -594,8 +774,18 @@ export default function App() {
 
           <div className="relative w-full h-full overflow-hidden flex flex-col bg-black">
             <div className="flex-1 relative overflow-hidden">
-              <AnimatePresence initial={false} custom={direction} mode="popLayout">
-                {currentItem && (
+              {loading && newsItems.length === 0 ? (
+                <div className="absolute inset-0 flex flex-col items-center justify-center bg-black z-50">
+                  <motion.div
+                    animate={{ rotate: 360 }}
+                    transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
+                    className="w-12 h-12 border-4 border-white/10 border-t-indigo-500 rounded-full mb-4 shadow-[0_0_20px_rgba(99,102,241,0.4)]"
+                  />
+                  <p className="text-white/40 font-bold uppercase tracking-widest text-xs animate-pulse">Caricamento Notizie...</p>
+                </div>
+              ) : (
+                <AnimatePresence initial={false} custom={direction} mode="popLayout">
+                {currentItem ? (
                       <motion.div
                         key={currentItem.id}
                         custom={direction}
@@ -635,24 +825,165 @@ export default function App() {
                           <div className="absolute inset-0 bg-gradient-to-t from-black via-black/40 to-transparent z-20" />
                         </div>
 
-                      <div className="relative z-20 flex-1 flex flex-col justify-end p-8 md:p-16">
+                      <div className="relative z-20 flex-1 flex flex-col justify-end p-8 md:p-16 pb-28 md:pb-36">
                         <motion.div 
-                          initial={{ y: 20, opacity: 0 }}
-                          animate={{ y: 0, opacity: 1 }}
-                          transition={{ duration: 0.4 }}
-                          className="max-w-2xl space-y-3"
+                          initial="hidden"
+                          animate="visible"
+                          variants={{
+                            hidden: { opacity: 0 },
+                            visible: {
+                              opacity: 1,
+                              transition: {
+                                staggerChildren: 0.15,
+                                delayChildren: 0.2
+                              }
+                            }
+                          }}
+                          className="max-w-2xl space-y-4"
                         >
-                          <h2 className="text-3xl md:text-4xl font-black text-white leading-tight tracking-tighter uppercase drop-shadow-2xl">
-                            {currentItem.title}
-                          </h2>
-                          <p className="text-base md:text-lg text-white/90 font-medium leading-snug drop-shadow-lg line-clamp-3">
-                            {currentItem.summary}
-                          </p>
+                          <div className="overflow-hidden">
+                            <h2 className="text-4xl md:text-6xl font-black text-white leading-tight tracking-tighter uppercase flex flex-wrap gap-x-3">
+                              {currentItem.title.split(' ').map((word, i) => (
+                                <motion.span
+                                  key={i}
+                                  variants={{
+                                    hidden: { y: "100%", opacity: 0, filter: 'blur(10px)' },
+                                    visible: { 
+                                      y: 0, 
+                                      opacity: 1, 
+                                      filter: 'blur(0px)',
+                                      transition: { type: "spring", stiffness: 200, damping: 20 }
+                                    }
+                                  }}
+                                  className="inline-block drop-shadow-[0_0_15px_rgba(255,255,255,0.4)]"
+                                  style={{
+                                    textShadow: '0 0 10px rgba(255,255,255,0.3), 0 0 20px rgba(255,255,255,0.2)'
+                                  }}
+                                >
+                                  {word}
+                                </motion.span>
+                              ))}
+                            </h2>
+                          </div>
+                          
+                          <motion.div
+                            variants={{
+                              hidden: { opacity: 0, x: -30 },
+                              visible: { 
+                                opacity: 1, 
+                                x: 0,
+                                transition: { duration: 0.8, ease: [0.16, 1, 0.3, 1] }
+                              }
+                            }}
+                            className="relative"
+                          >
+                            <div className="absolute left-0 top-0 bottom-0 w-1 bg-gradient-to-b from-pink-500 to-purple-600 shadow-[0_0_10px_rgba(236,72,153,0.5)]" />
+                            <p className="text-base md:text-xl text-white/90 font-medium leading-relaxed pl-6 line-clamp-3 drop-shadow-md italic">
+                              {currentItem.summary}
+                            </p>
+                          </motion.div>
+
+                          <motion.div
+                            variants={{
+                              hidden: { opacity: 0, scale: 0.8 },
+                              visible: { 
+                                opacity: 1, 
+                                scale: 1,
+                                transition: { delay: 0.6, duration: 0.4 }
+                              }
+                            }}
+                            className="flex items-center gap-4 pt-2"
+                          >
+                            <div className="flex items-center gap-2">
+                              <span className={`px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-widest border ${selectedCategoryData?.border || 'border-white/20'} ${selectedCategoryData?.color || 'bg-white/10'} text-white shadow-[0_0_15px_rgba(255,255,255,0.1)]`}>
+                                {currentItem.category}
+                              </span>
+                              {favorites[currentItem.id] && (
+                                <motion.div
+                                  initial={{ scale: 0, rotate: -45 }}
+                                  animate={{ scale: 1, rotate: 0 }}
+                                  className="w-6 h-6 rounded-full bg-pink-500 flex items-center justify-center shadow-[0_0_15px_rgba(236,72,153,0.6)]"
+                                >
+                                  <Heart className="w-3 h-3 text-white fill-white" />
+                                </motion.div>
+                              )}
+                            </div>
+                            <span className="text-[10px] font-bold text-white/40 uppercase tracking-widest">
+                              {currentItem.source} • {currentItem.time}
+                            </span>
+                          </motion.div>
+
+                          <motion.a
+                            href={currentItem.url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            variants={{
+                              hidden: { opacity: 0, y: 20 },
+                              visible: { 
+                                opacity: 1, 
+                                y: 0,
+                                transition: { delay: 0.8, duration: 0.4 }
+                              }
+                            }}
+                            className="inline-flex items-center gap-3 px-8 py-4 rounded-full bg-indigo-500 text-white font-black uppercase text-xs tracking-[0.2em] shadow-[0_0_30px_rgba(99,102,241,0.4)] hover:bg-indigo-600 transition-all active:scale-95 group w-fit"
+                          >
+                            Leggi di più
+                            <motion.span
+                              animate={{ x: [0, 5, 0] }}
+                              transition={{ duration: 1.5, repeat: Infinity }}
+                            >
+                              →
+                            </motion.span>
+                          </motion.a>
                         </motion.div>
                       </div>
                     </motion.div>
+                ) : !showFavoritesOnly ? (
+                  <div className="absolute inset-0 flex flex-col items-center justify-center bg-black p-8 text-center">
+                    <motion.div
+                      initial={{ scale: 0.8, opacity: 0 }}
+                      animate={{ scale: 1, opacity: 1 }}
+                      className="max-w-md space-y-6"
+                    >
+                      <div className="w-20 h-20 bg-white/5 border border-white/10 rounded-3xl flex items-center justify-center mx-auto mb-8">
+                        <Search className="w-10 h-10 text-white/20" />
+                      </div>
+                      <h3 className="text-3xl font-black text-white uppercase tracking-tighter">Nessuna Notizia</h3>
+                      <p className="text-white/40 text-lg font-medium leading-relaxed">
+                        Non abbiamo trovato articoli per questa categoria o ricerca. Prova a cambiare filtri o aggiorna i feed.
+                      </p>
+                      <button 
+                        onClick={fetchAllFeeds}
+                        className="px-10 py-5 bg-indigo-600 text-white font-black uppercase tracking-tighter text-sm hover:bg-indigo-500 transition-all shadow-[0_0_30px_rgba(79,70,229,0.3)]"
+                      >
+                        Aggiorna Feed
+                      </button>
+                    </motion.div>
+                  </div>
+                ) : (
+                  <motion.div 
+                    initial={{ opacity: 0, scale: 0.9 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    exit={{ opacity: 0, scale: 0.9 }}
+                    className="absolute inset-0 flex flex-col items-center justify-center text-white/40 gap-6 p-8 text-center"
+                  >
+                    <div className="w-24 h-24 rounded-full bg-white/5 flex items-center justify-center border border-white/10 mb-2">
+                      <Heart className="w-10 h-10 opacity-20" />
+                    </div>
+                    <div className="space-y-2">
+                      <h3 className="text-2xl font-black text-white uppercase tracking-tighter">Nessun preferito</h3>
+                      <p className="text-sm text-white/40 max-w-xs mx-auto">Salva le notizie che ti interessano cliccando sull'icona del cuore.</p>
+                    </div>
+                    <button 
+                      onClick={() => setShowFavoritesOnly(false)}
+                      className="px-8 py-3 rounded-full bg-white/10 border border-white/20 text-white font-bold uppercase text-xs tracking-[0.2em] hover:bg-white/20 transition-all active:scale-95"
+                    >
+                      Esplora Notizie
+                    </button>
+                  </motion.div>
                 )}
               </AnimatePresence>
+              )}
             </div>
           </div>
         </div>
