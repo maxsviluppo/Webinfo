@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Newspaper, TrendingUp, Clock, Share2, ExternalLink, Menu, X, Settings, User as UserIcon, Heart, LogOut, BookOpen, LayoutGrid, Globe, Cpu, Music, Gamepad2, Palette, FlaskConical, Search, RefreshCw } from 'lucide-react';
 import { auth, loginWithGoogle, logout, onAuthStateChanged, db, handleFirestoreError, OperationType, User } from './firebase';
@@ -59,7 +59,6 @@ const variants = {
 };
 
 const FEEDS = [
-  { url: "MOCK_BREAKING", cat: "Cronaca", name: "Ultima Ora" },
   { url: "https://www.ansa.it/sito/ansait_rss.xml", cat: "Cronaca", name: "ANSA" },
   { url: "https://www.tgcom24.mediaset.it/rss/homepage.xml", cat: "Cronaca", name: "TGCOM24" },
   { url: "https://www.adnkronos.com/rss/home", cat: "Cronaca", name: "Adnkronos" },
@@ -101,11 +100,18 @@ export default function App() {
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [isSearchOpen, setIsSearchOpen] = useState(false);
+  const [showSplash, setShowSplash] = useState(true);
+  const splashBg = useMemo(() => `https://picsum.photos/seed/${Math.random()}/1920/1080`, []);
   const containerRef = useRef<HTMLDivElement>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
 
   const selectedCategoryData = CATEGORIES.find(c => c.id === selectedCategory);
   const SelectedCategoryIcon = selectedCategoryData?.icon;
+
+  useEffect(() => {
+    const timer = setTimeout(() => setShowSplash(false), 3500);
+    return () => clearTimeout(timer);
+  }, []);
 
   // Reset to home view after login/logout
   useEffect(() => {
@@ -179,31 +185,6 @@ export default function App() {
 
   // Fetch Real News Feeds
   const fetchSingleFeed = async (feed: typeof FEEDS[0]) => {
-    if (feed.url === "MOCK_BREAKING") {
-      return [
-        {
-          id: `breaking-1-${Date.now()}`,
-          title: "Benvenuto su NewsHub Italia",
-          url: "#",
-          summary: "Stiamo caricando le ultime notizie dai principali quotidiani italiani e internazionali. Scorri per scoprire le novità in tempo reale.",
-          category: "Cronaca",
-          source: "NewsHub",
-          imageUrl: "https://picsum.photos/seed/newshub/1600/900",
-          time: "Adesso"
-        },
-        {
-          id: `breaking-2-${Date.now()}`,
-          title: "Aggiornamento Feed in corso",
-          url: "#",
-          summary: "Il nostro sistema sta interrogando ANSA, Reuters, Wired e altre 15 fonti per offrirti una panoramica completa.",
-          category: "Tecnologia",
-          source: "Sistema",
-          imageUrl: "https://picsum.photos/seed/tech/1600/900",
-          time: "In corso"
-        }
-      ];
-    }
-
     const proxies = [
       (url: string) => `https://corsproxy.io/?${encodeURIComponent(url)}`,
       (url: string) => `https://corsproxy.org/?${encodeURIComponent(url)}`,
@@ -290,53 +271,45 @@ export default function App() {
       }
     }
 
-    // Fallback mock data if all proxies fail
-    return Array.from({ length: 2 }).map((_, idx) => ({
-      id: `fallback-${feed.name}-${idx}-${Date.now()}`,
-      title: `Anteprima: ${feed.name} - Aggiornamento ${idx + 1}`,
-      url: feed.url,
-      summary: `Il feed di ${feed.name} è temporaneamente non raggiungibile. Clicca per visitare il sito originale.`,
-      category: feed.cat,
-      source: feed.name,
-      imageUrl: `https://picsum.photos/seed/${feed.cat.toLowerCase()}-${idx}/1600/900`,
-      time: "In attesa"
-    }));
+    // Return empty array if all proxies fail
+    return [];
   };
 
   const fetchAllFeeds = async () => {
     setLoading(true);
     setNewsItems([]); // Clear existing items on manual refresh
     
-    // 1. Fetch the mock breaking feed first to show something immediately (Instant)
-    const breakingItems = await fetchSingleFeed(FEEDS[0]);
-    setNewsItems(breakingItems);
+    // 1. First step: Load ~20-30 news items immediately (first 3 reliable feeds)
+    const initialFeeds = FEEDS.slice(0, 3);
+    const initialResults = await Promise.all(initialFeeds.map(feed => fetchSingleFeed(feed)));
+    const initialItems = initialResults.flat();
     
-    // 2. Fetch ANSA immediately after (Usually very fast and reliable)
-    const ansaItems = await fetchSingleFeed(FEEDS[1]);
-    setNewsItems(prev => {
-      const existingIds = new Set(prev.map(i => i.id));
-      const newItems = ansaItems.filter(i => !existingIds.has(i.id));
-      return [...prev, ...newItems];
-    });
+    setNewsItems(initialItems);
+    setLoading(false); // Stop main loading spinner after first step
 
-    // 3. Fetch the rest in parallel
-    const otherFeeds = FEEDS.slice(2);
-    const promises = otherFeeds.map(async (feed) => {
-      const items = await fetchSingleFeed(feed);
-      setNewsItems(prev => {
-        const existingIds = new Set(prev.map(i => i.id));
-        const newItems = items.filter(i => !existingIds.has(i.id));
-        return [...prev, ...newItems].sort((a, b) => {
-          // Keep breaking news at the top if possible, otherwise randomize
-          if (a.id.startsWith('breaking')) return -1;
-          if (b.id.startsWith('breaking')) return 1;
-          return 0.5 - Math.random();
+    // 2. Background loading: Process remaining feeds in batches of 10
+    const remainingFeeds = FEEDS.slice(3);
+    const batchSize = 10;
+    
+    for (let i = 0; i < remainingFeeds.length; i += batchSize) {
+      const batch = remainingFeeds.slice(i, i + batchSize);
+      
+      // Process batch in parallel
+      const batchResults = await Promise.all(batch.map(async (feed) => {
+        const items = await fetchSingleFeed(feed);
+        setNewsItems(prev => {
+          const existingIds = new Set(prev.map(item => item.id));
+          const newItems = items.filter(item => !existingIds.has(item.id));
+          return [...prev, ...newItems];
         });
-      });
-    });
-
-    await Promise.allSettled(promises);
-    setLoading(false);
+        return items;
+      }));
+      
+      // Optional: small delay between batches to keep UI smooth
+      if (i + batchSize < remainingFeeds.length) {
+        await new Promise(resolve => setTimeout(resolve, 500));
+      }
+    }
   };
 
   useEffect(() => {
@@ -408,6 +381,80 @@ export default function App() {
 
   return (
     <div className="h-screen w-full bg-black overflow-hidden relative flex items-center justify-center font-montserrat text-slate-200">
+      <AnimatePresence>
+        {showSplash && (
+          <motion.div
+            initial={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 1, ease: "easeInOut" }}
+            className="fixed inset-0 z-[200] flex flex-col items-center justify-center overflow-hidden"
+          >
+            {/* Random Background */}
+            <motion.div 
+              initial={{ scale: 1.1 }}
+              animate={{ scale: 1 }}
+              transition={{ duration: 5, ease: "linear" }}
+              className="absolute inset-0 z-0"
+            >
+              <img 
+                src={splashBg} 
+                alt="Splash Background" 
+                className="w-full h-full object-cover"
+                referrerPolicy="no-referrer"
+              />
+              <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
+            </motion.div>
+
+            {/* Content */}
+            <div className="relative z-10 flex flex-col items-center text-center">
+              <motion.p 
+                initial={{ y: 20, opacity: 0 }}
+                animate={{ y: 0, opacity: 1 }}
+                transition={{ delay: 0.5, duration: 0.8 }}
+                className="text-white/60 uppercase tracking-[0.4em] text-xs font-bold mb-6"
+              >
+                Benvenuti in
+              </motion.p>
+              
+              <motion.div
+                initial={{ scale: 0.8, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                transition={{ delay: 0.8, duration: 1, ease: [0.16, 1, 0.3, 1] }}
+                className="relative"
+              >
+                {/* Logo Placeholder - User should upload their logo as /logo.png */}
+                <img 
+                  src="https://i.imgur.com/8W0Xm8R.png" 
+                  alt="SmartInfo Logo" 
+                  className="w-64 md:w-80 h-auto drop-shadow-[0_0_30px_rgba(255,255,255,0.3)]"
+                  referrerPolicy="no-referrer"
+                  onError={(e) => {
+                    // Fallback if image fails
+                    (e.target as HTMLImageElement).src = "https://picsum.photos/seed/logo/400/200?blur=2";
+                  }}
+                />
+              </motion.div>
+
+              <motion.div 
+                initial={{ width: 0 }}
+                animate={{ width: 100 }}
+                transition={{ delay: 1.2, duration: 1.5, ease: "easeInOut" }}
+                className="h-[1px] bg-white/20 mt-12 mb-4"
+              />
+              
+              <motion.p
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ delay: 2, duration: 0.5 }}
+                className="text-white/30 text-[10px] uppercase tracking-widest"
+              >
+                Caricamento notizie intelligenti...
+              </motion.p>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       <motion.main 
         initial={{ opacity: 0 }}
         animate={{ 
