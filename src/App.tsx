@@ -485,7 +485,7 @@ export default function App() {
           </AnimatePresence>
 
           {/* Fixed Buttons at Bottom Right */}
-          <div className="absolute bottom-10 right-10 z-[100] flex items-center gap-4">
+          <div className="absolute bottom-[30px] right-10 z-[100] flex items-center gap-4">
             <AnimatePresence>
               {!isMenuOpen && (
                 <motion.button
@@ -499,7 +499,7 @@ export default function App() {
                       window.open(displayedNews[currentIndex].url, '_blank');
                     }
                   }}
-                  className="w-12 h-12 rounded-full bg-white/10 backdrop-blur-md border border-white/10 text-white flex items-center justify-center shadow-lg"
+                  className="w-12 h-12 rounded-full bg-white/5 backdrop-blur-md border border-white/5 text-white/50 flex items-center justify-center shadow-lg hover:bg-white/10 hover:text-white transition-all"
                 >
                   <ExternalLink className="w-5 h-5" />
                 </motion.button>
@@ -751,7 +751,7 @@ export default function App() {
                 {selectedCategory !== 'all' && !isMenuOpen && (
                   <motion.button
                     initial={{ opacity: 0, y: 20, scale: 0.5 }}
-                    animate={{ opacity: 1, y: -135, scale: 1 }}
+                    animate={{ opacity: 1, y: -125, scale: 1 }}
                     exit={{ opacity: 0, y: 20, scale: 0.5 }}
                     transition={{ type: "spring", stiffness: 400, damping: 25 }}
                     whileHover={{ scale: 1.1 }}
@@ -773,7 +773,7 @@ export default function App() {
                 {!isMenuOpen && (
                   <motion.button
                     initial={{ opacity: 0, y: 20, scale: 0.5 }}
-                    animate={{ opacity: 1, y: -75, scale: 1 }}
+                    animate={{ opacity: 1, y: -65, scale: 1 }}
                     exit={{ opacity: 0, y: 20, scale: 0.5 }}
                     transition={{ type: "spring", stiffness: 400, damping: 25 }}
                     whileHover={{ scale: 1.1 }}
