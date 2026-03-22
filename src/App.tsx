@@ -12,12 +12,13 @@ import { collection, doc, setDoc, deleteDoc, onSnapshot, query, where, Timestamp
 interface NewsItem {
   id: string;
   title: string;
+  url: string;
   summary: string;
   category: string;
-  time: string;
-  imageUrl: string;
-  url: string;
   source: string;
+  imageUrl: string;
+  videoUrl?: string;
+  time: string;
 }
 
 const variants = {
@@ -246,61 +247,98 @@ export default function App() {
                        item.querySelector("summary")?.textContent || 
                        item.querySelector("content")?.textContent || "";
 
-          const parseImage = () => {
-            // Helper to find tags ignoring namespaces
+          const parseImageAndVideo = () => {
+            let img = `https://picsum.photos/seed/${feed.cat.toLowerCase()}-${idx}/1600/900`;
+            let vid: string | undefined = undefined;
+
             const getTag = (tagName: string) => {
               const tags = item.getElementsByTagNameNS("*", tagName);
               if (tags.length > 0) return tags[0];
               const localTags = item.getElementsByTagName(tagName);
               if (localTags.length > 0) return localTags[0];
-              // Try with prefix if namespace handling is weird
               const prefixedTags = item.getElementsByTagName(`media:${tagName}`);
               if (prefixedTags.length > 0) return prefixedTags[0];
               return null;
             };
 
-            // Priority 1: media:content (most common for high quality)
+            // Search for video in tags (media:content or enclosure)
+            const mContents = Array.from(item.getElementsByTagNameNS("*", "content")).concat(
+              Array.from(item.getElementsByTagName("media:content")),
+              Array.from(item.getElementsByTagName("content"))
+            );
+
+            for (const content of mContents) {
+              const type = content.getAttribute("type") || "";
+              const url = content.getAttribute("url");
+              if (url && type.startsWith("video/")) {
+                vid = url;
+              } else if (url && type.startsWith("image/") && !img.includes('http')) {
+                img = url;
+              } else if (url && !img.includes('http')) {
+                img = url;
+              }
+            }
+
             const mContent = getTag("content");
-            if (mContent?.getAttribute("url")) return mContent.getAttribute("url");
+            if (mContent?.getAttribute("url")) {
+              const url = mContent.getAttribute("url")!;
+              if (mContent.getAttribute("type")?.startsWith("video/")) vid = url;
+              else img = url;
+            }
             
-            // Priority 2: enclosure (standard RSS)
             const enclosure = item.querySelector("enclosure");
-            if (enclosure?.getAttribute("url") && enclosure.getAttribute("type")?.startsWith("image/")) {
-              return enclosure.getAttribute("url");
-            }
-            if (enclosure?.getAttribute("url")) return enclosure.getAttribute("url");
-
-            // Priority 3: media:thumbnail
-            const mThumb = getTag("thumbnail");
-            if (mThumb?.getAttribute("url")) return mThumb.getAttribute("url");
-
-            // Priority 4: media:group
-            const mGroup = getTag("group");
-            if (mGroup) {
-              const gContent = mGroup.getElementsByTagNameNS("*", "content")[0] || mGroup.getElementsByTagName("content")[0];
-              if (gContent?.getAttribute("url")) return gContent.getAttribute("url");
+            if (enclosure?.getAttribute("url")) {
+              const url = enclosure.getAttribute("url")!;
+              const type = enclosure.getAttribute("type") || "";
+              if (type.startsWith("video/")) vid = url;
+              else if (type.startsWith("image/")) img = url;
+              else if (!img.includes('http')) img = url;
             }
 
-            // Priority 5: Extract from description/content via regex
-            const contentEncoded = item.getElementsByTagName("content:encoded")[0]?.textContent || "";
-            const fullContent = item.querySelector("content")?.textContent || "";
-            const combinedContent = desc + contentEncoded + fullContent;
+            if (!img.includes('http')) {
+              const mThumb = getTag("thumbnail");
+              if (mThumb?.getAttribute("url")) img = mThumb.getAttribute("url")!;
+              
+              const mGroup = getTag("group");
+              if (mGroup) {
+                const gContent = mGroup.getElementsByTagNameNS("*", "content")[0] || mGroup.getElementsByTagName("content")[0];
+                if (gContent?.getAttribute("url")) img = gContent.getAttribute("url")!;
+              }
 
-            // Better regex for images in HTML
-            const imgRegex = /<img[^>]+src=["']([^"']+)["']/;
-            const foundImg = combinedContent.match(imgRegex);
-            if (foundImg && foundImg[1] && !foundImg[1].includes('feedburner')) {
-              let url = foundImg[1];
-              // Some sites use relative URLs in their feed descriptions
-              if (url.startsWith('//')) url = 'https:' + url;
-              return url;
+              const contentEncoded = item.getElementsByTagName("content:encoded")[0]?.textContent || "";
+              const fullContent = item.querySelector("content")?.textContent || "";
+              const combinedContent = desc + contentEncoded + fullContent;
+              const imgRegex = /<img[^>]+src=["']([^"']+)["']/;
+              const foundImg = combinedContent.match(imgRegex);
+              if (foundImg && foundImg[1] && !foundImg[1].includes('feedburner')) {
+                let url = foundImg[1];
+                if (url.startsWith('//')) url = 'https:' + url;
+                img = url;
+              }
             }
 
-            // Priority 6: Fallback to category seed
-            return `https://picsum.photos/seed/${feed.cat.toLowerCase()}-${idx}/1600/900`;
+            return { img, vid };
           };
 
-          const thumb = parseImage();
+          const { img, vid } = parseImageAndVideo();
+
+          // Enhanced category detection
+          let finalCat = feed.cat;
+          const rssCat = item.querySelector("category")?.textContent?.toLowerCase();
+          if (rssCat) {
+            const catMap: Record<string, string> = {
+              'sport': 'Sport', 'calcio': 'Sport', 'finanza': 'Finanza', 'economia': 'Finanza',
+              'borsa': 'Finanza', 'tecnologia': 'Tecnologia', 'tech': 'Tecnologia',
+              'scienza': 'Scienza', 'cultura': 'Cultura', 'politica': 'Mondo',
+              'esteri': 'Mondo', 'cronaca': 'Cronaca'
+            };
+            for (const [key, val] of Object.entries(catMap)) {
+              if (rssCat.includes(key)) {
+                finalCat = val;
+                break;
+              }
+            }
+          }
 
           const pubDate = item.querySelector("pubDate")?.textContent || 
                           item.querySelector("published")?.textContent || 
@@ -313,9 +351,10 @@ export default function App() {
             title: title,
             url: link,
             summary: desc.replace(/<[^>]*>?/gm, '').substring(0, 800) + "...",
-            category: feed.cat,
+            category: finalCat,
             source: feed.name,
-            imageUrl: thumb,
+            imageUrl: img,
+            videoUrl: vid,
             time: time
           };
         });
@@ -961,17 +1000,36 @@ export default function App() {
                         }}
                         className="absolute inset-0 flex flex-col cursor-grab active:cursor-grabbing preserve-3d"
                       >
-                        <div className="absolute inset-0 z-0">
-                          <img 
-                            src={currentItem.imageUrl} 
-                            alt={currentItem.title}
-                            referrerPolicy="no-referrer"
-                            className="w-full h-full object-cover"
-                          />
-                          {/* Vignette Effect */}
-                          <div className="absolute inset-0 bg-[radial-gradient(circle,transparent_20%,rgba(0,0,0,0.4)_70%,rgba(0,0,0,0.9)_100%)] z-10 pointer-events-none" />
-                          {/* Bottom Gradient for Text Readability */}
-                          <div className="absolute inset-0 bg-gradient-to-t from-black via-black/40 to-transparent z-20" />
+                        <div className="absolute inset-x-0 top-0 h-[70%] z-0 bg-black overflow-hidden">
+                          {currentItem.videoUrl ? (
+                            <video
+                              src={currentItem.videoUrl}
+                              autoPlay
+                              loop
+                              muted
+                              playsInline
+                              className="w-full h-full object-cover opacity-80 scale-150 origin-top"
+                            />
+                          ) : (
+                            <div className="relative w-full h-full scale-150 origin-top">
+                              <img 
+                                src={currentItem.imageUrl} 
+                                alt={currentItem.title}
+                                referrerPolicy="no-referrer"
+                                className="absolute inset-0 w-full h-full object-cover object-top blur-2xl opacity-40 scale-110"
+                              />
+                              <img 
+                                src={currentItem.imageUrl} 
+                                alt={currentItem.title}
+                                referrerPolicy="no-referrer"
+                                className="relative w-full h-full object-contain object-top z-10"
+                              />
+                            </div>
+                          )}
+                          {/* Bottom-focused Vignette/Gradient - 80% Increased Intensity */}
+                          <div className="absolute inset-x-0 bottom-0 h-[80%] z-20 pointer-events-none bg-gradient-to-t from-black via-black/90 to-transparent opacity-100" />
+                          <div className="absolute inset-x-0 bottom-0 h-1/2 z-20 pointer-events-none bg-gradient-to-t from-black to-transparent opacity-100" />
+                          <div className="absolute inset-0 z-20 pointer-events-none shadow-[inset_0_-250px_200px_-100px_rgba(0,0,0,1)]" />
                         </div>
 
                       <div className="relative z-20 flex-1 flex flex-col justify-end p-8 md:p-16 pt-0 pb-28 md:pb-36 mt-0">
@@ -1027,7 +1085,7 @@ export default function App() {
                             className="relative"
                           >
                             <div className="absolute left-0 top-0 bottom-0 w-1 bg-gradient-to-b from-pink-500 to-purple-600 shadow-[0_0_10px_rgba(236,72,153,0.5)]" />
-                            <p className="text-lg md:text-xl text-white/90 font-medium leading-relaxed pl-6 drop-shadow-md italic line-clamp-8 max-w-md">
+                            <p className="text-lg md:text-xl text-white/90 font-medium leading-tight pl-6 drop-shadow-md italic line-clamp-8 max-w-md">
                               {currentItem.summary}
                             </p>
                           </motion.div>
