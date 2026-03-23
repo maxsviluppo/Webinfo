@@ -434,7 +434,7 @@ export default function App() {
   const SelectedCategoryIcon = selectedCategoryData?.icon;
 
   useEffect(() => {
-    const timer = setTimeout(() => setShowSplash(false), 1500);
+    const timer = setTimeout(() => setShowSplash(false), 500);
     const consent = localStorage.getItem('cookieConsent');
     if (!consent) {
       setTimeout(() => setShowCookieBanner(true), 4000);
@@ -527,7 +527,7 @@ export default function App() {
       try {
         const proxyUrl = getProxyUrl(feed.url);
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 8000); // 8 seconds timeout
+        const timeoutId = setTimeout(() => controller.abort(), 3000); // 3 seconds timeout for speed
 
         const response = await fetch(proxyUrl, { signal: controller.signal });
         clearTimeout(timeoutId);
@@ -693,38 +693,37 @@ export default function App() {
     setLoading(true);
     setNewsItems([]); 
     
-    // 1. Uniform Initial Loading: Load up to 10 feeds from EACH category initially
+    // 1. Uniform Initial Loading: Load the FIRST feed from EACH category initially
     const categoriesToLoad = CATEGORIES.filter(c => c.id !== 'all');
-    let initialFeeds: typeof FEEDS = [];
+    const firstFeeds = categoriesToLoad.map(cat => FEEDS.find(f => f.cat === cat.label) || FEEDS[0]).filter((v, i, a) => a.findIndex(t => (t.url === v.url)) === i);
     
+    // Quick load of first 10 items to show content ASAP
+    const initialItems = await Promise.all(firstFeeds.map(feed => fetchSingleFeed(feed)));
+    setNewsItems(initialItems.flat().sort(() => Math.random() - 0.5));
+    setLoading(false); // Hide spinner immediately after first 10 feeds
+
+    // 2. Background loading: Process 10 feeds per category
+    let nextFeeds: typeof FEEDS = [];
     categoriesToLoad.forEach(cat => {
-      const catFeeds = FEEDS.filter(f => f.cat === cat.label).slice(0, 10);
-      initialFeeds = [...initialFeeds, ...catFeeds];
+      const catFeeds = FEEDS.filter(f => f.cat === cat.label && !firstFeeds.some(ff => ff.url === f.url)).slice(0, 9);
+      nextFeeds = [...nextFeeds, ...catFeeds];
     });
     
-    // Remove duplicates
-    initialFeeds = initialFeeds.filter((v, i, a) => a.findIndex(t => (t.url === v.url)) === i);
-    
-    // Process initial feeds in small concurrent batches for speed without hanging
     const initialBatchSize = 15;
-    for (let i = 0; i < initialFeeds.length; i += initialBatchSize) {
-      const batch = initialFeeds.slice(i, i + initialBatchSize);
+    for (let i = 0; i < nextFeeds.length; i += initialBatchSize) {
+      const batch = nextFeeds.slice(i, i + initialBatchSize);
       const results = await Promise.all(batch.map(feed => fetchSingleFeed(feed)));
       const items = results.flat();
       
       setNewsItems(prev => {
         const existingIds = new Set(prev.map(item => item.id));
         const newItems = items.filter(item => !existingIds.has(item.id));
-        const updated = [...prev, ...newItems].sort(() => Math.random() - 0.5);
-        if (updated.length > 0) setLoading(false); // Hide spinner as soon as we have some news
-        return updated;
+        return [...prev, ...newItems].sort(() => Math.random() - 0.5);
       });
     }
 
-    setLoading(false);
-
-    // 2. Background loading: Process remaining feeds in batches of 10
-    const loadedUrls = new Set(initialFeeds.map(f => f.url));
+    // 3. Complete remaining feeds in background
+    const loadedUrls = new Set([...firstFeeds, ...nextFeeds].map(f => f.url));
     const remainingFeeds = FEEDS.filter(f => !loadedUrls.has(f.url));
     const batchSize = 10;
     
@@ -740,7 +739,7 @@ export default function App() {
       }));
       
       if (i + batchSize < remainingFeeds.length) {
-        await new Promise(resolve => setTimeout(resolve, 100));
+        await new Promise(resolve => setTimeout(resolve, 50));
       }
     }
   };
