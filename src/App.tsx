@@ -169,9 +169,13 @@ function NewsCard({
 
   const getIframeUrl = (url: string) => {
     const secureUrl = ensureHttps(url);
-    // Explicitly proxy sites known to have strict X-Frame-Options like TGCOM24
-    if (secureUrl.includes('tgcom24') || secureUrl.includes('mediaset') || secureUrl.includes('ansa.it')) {
-       return `https://corsproxy.io/?${encodeURIComponent(secureUrl)}`;
+    // Explicitly proxy sites known to have strict X-Frame-Options
+    const blockedSites = ['tgcom24', 'mediaset', 'ansa.it', 'cnbc', 'bbc', 'repubblica', 'gazzetta', 'reuters'];
+    const requiresProxy = blockedSites.some(site => secureUrl.toLowerCase().includes(site));
+    
+    if (requiresProxy) {
+       // Switch to codetabs because corsproxy.io is currently giving 403 Forbidden
+       return `https://api.codetabs.com/v1/proxy/?url=${encodeURIComponent(secureUrl)}`;
     }
     return secureUrl;
   };
@@ -515,18 +519,17 @@ export default function App() {
   // Fetch Real News Feeds
   const fetchSingleFeed = async (feed: typeof FEEDS[0]) => {
     const proxies = [
-      (url: string) => `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`,
-      (url: string) => `https://corsproxy.io/?${encodeURIComponent(url)}`,
-      (url: string) => `https://api.codetabs.com/v1/proxy?url=${encodeURIComponent(url)}`,
-      (url: string) => `https://corsproxy.org/?${encodeURIComponent(url)}`,
+      (url: string) => `https://api.allorigins.win/get?url=${encodeURIComponent(url)}`,
+      (url: string) => `https://api.codetabs.com/v1/proxy/?url=${encodeURIComponent(url)}`,
       (url: string) => `https://thingproxy.freeboard.io/fetch/${url}`,
+      (url: string) => `https://corsproxy.io/?${encodeURIComponent(url)}`,
     ];
 
     for (const getProxyUrl of proxies) {
       try {
         const proxyUrl = getProxyUrl(feed.url);
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 4000); // 4s timeout
+        const timeoutId = setTimeout(() => controller.abort(), 5000); // 5s timeout
 
         const response = await fetch(proxyUrl, { signal: controller.signal });
         clearTimeout(timeoutId);
@@ -706,7 +709,7 @@ export default function App() {
             const newItems = items.filter(item => !existingIds.has(item.id));
             if (newItems.length > 0) {
               setLoading(false); // Hide spinner on FIRST successful fetch!
-              return [...prev, ...newItems].sort(() => Math.random() - 0.5);
+              return [...prev, ...newItems.sort(() => Math.random() - 0.5)];
             }
             return prev;
           });
@@ -716,14 +719,16 @@ export default function App() {
       }
     };
 
-    // Fire unblocking fetching for the first feeds
-    firstFeeds.forEach(feed => processFeed(feed));
+    // Fire unblocking fetching for the first feeds staggered to prevent Rate Limits (429)
+    firstFeeds.forEach((feed, idx) => {
+      setTimeout(() => processFeed(feed), idx * 150);
+    });
 
     // Wait a brief moment to give priority to the very first feeds before hitting network with background
-    await new Promise(resolve => setTimeout(resolve, 1500));
+    await new Promise(resolve => setTimeout(resolve, 2000));
 
     // If nothing loaded yet, don't hang forever, close loader (empty state will show if it fails completely)
-    setTimeout(() => setLoading(false), 10000);
+    setTimeout(() => setLoading(false), 12000);
 
     // 2. Background loading: Pre-calculate rest of the feeds
     let nextFeeds: typeof FEEDS = [];
@@ -768,7 +773,7 @@ export default function App() {
           setNewsItems(prev => {
             const existingIds = new Set(prev.map(item => item.id));
             const newItems = items.filter(item => !existingIds.has(item.id));
-            return [...prev, ...newItems].sort(() => Math.random() - 0.5);
+            return [...prev, ...newItems.sort(() => Math.random() - 0.5)];
           });
         });
       }
