@@ -220,7 +220,27 @@ function NewsCard({
           onClick={() => setFlipped(true)}
         >
           <div className="absolute inset-x-0 top-0 h-[70%] z-0 bg-black overflow-hidden">
-            {currentItem.videoUrl ? (
+            {(currentItem.videoUrl && (currentItem.videoUrl.includes('embed') || currentItem.videoUrl.includes('youtube') || currentItem.videoUrl.includes('vimeo'))) ? (
+              (() => {
+                const base = currentItem.videoUrl;
+                let finalUrl = base;
+                if (base.includes('youtube.com') || base.includes('youtu.be')) {
+                  const videoId = (base.split('/').pop() || '').split('?')[0];
+                  finalUrl = `${base}?autoplay=1&mute=1&loop=1&playlist=${videoId}&controls=0&showinfo=0&rel=0&modestbranding=1&origin=${window.location.origin}`;
+                } else if (base.includes('vimeo.com')) {
+                  finalUrl = `${base}?autoplay=1&muted=1&loop=1&background=1`;
+                }
+                
+                return (
+                  <iframe
+                    src={finalUrl}
+                    className="w-full h-full scale-[1.5] pointer-events-none opacity-80"
+                    allow="autoplay; encrypted-media"
+                    title={currentItem.title}
+                  />
+                );
+              })()
+            ) : currentItem.videoUrl ? (
               <video
                 src={currentItem.videoUrl}
                 autoPlay
