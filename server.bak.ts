@@ -311,19 +311,9 @@ app.get("/api/proxy", async (req, res) => {
       html = html.replace(/<meta\s+http-equiv=["']refresh["'][^>]*>/gi, '');
     }
 
-    // Add Base Tag for relative assets and ensure it works with the UI
+    // Add Base Tag for relative assets
     if (html.includes("<head>")) {
-      // Also inject a small script to block frame-breaking from JS directly
-      const frameScript = `
-        <script>
-          // Extra protection against frame-breaking
-          window.top = window.self;
-          window.parent = window.self;
-          Object.defineProperty(window, 'top', { get: function() { return window.self; } });
-          Object.defineProperty(window, 'parent', { get: function() { return window.self; } });
-        </script>
-      `;
-      html = html.replace("<head>", `<head>${baseTag}${frameScript}`);
+      html = html.replace("<head>", `<head>${baseTag}`);
     } else {
       html = `${baseTag}${html}`;
     }
@@ -393,20 +383,20 @@ async function fetchMetaInfo(url: string) {
   }
 }
 
-function extractImageUrl(item: any) {
+function extractImage(item: any) {
   // 1. Enclosure
   if (item.enclosure && item.enclosure.url) {
     if (item.enclosure.url.match(/\.(jpg|jpeg|png|webp|gif)/i)) return item.enclosure.url;
   }
   
-  // 2. Media Content / Thumbnail / Group
+  // 2. Media Content / Thumbnail
   const mediaTags = ["media:content", "media:thumbnail", "media:group", "image", "enclosure", "thumb"];
   for (const tag of mediaTags) {
     const content = item[tag];
     if (content) {
       if (Array.isArray(content)) {
         const firstWithUrl = content.find((c: any) => {
-          const url = c.$?.url || c.url || (typeof c === 'string' ? c : null) || (c["media:content"]?.[0]?.$?.url);
+          const url = c.$?.url || c.url || (typeof c === 'string' ? c : null);
           return url && url.match(/\.(jpg|jpeg|png|webp|gif)/i);
         });
         if (firstWithUrl) return firstWithUrl.$?.url || firstWithUrl.url || (typeof firstWithUrl === 'string' ? firstWithUrl : null);
@@ -419,11 +409,11 @@ function extractImageUrl(item: any) {
     }
   }
   
-  // 3. Content/Description Regex - Prioritize content:encoded
+  // 3. Content/Description Regex - Prefer content:encoded as it usually has the full HTML and images
   const content = item["content:encoded"] || item.content || item.description || "";
-  const imgMatch = content.match(/<img[^>]+(?:src|data-src|srcset)=["']([^"'> ]+)["']/);
-  if (imgMatch) {
-    const url = imgMatch[1];
+  const imgMatches = content.matchAll(/<img[^>]+(?:src|data-src|srcset)="([^"> ]+)"/g);
+  for (const match of imgMatches) {
+    const url = match[1];
     if (!url.includes('pixel') && !url.includes('analytics') && !url.includes('doubleclick') && !url.includes('spacer')) {
       return url;
     }
@@ -432,7 +422,7 @@ function extractImageUrl(item: any) {
   return null;
 }
 
-function extractVideoUrl(item: any) {
+function extractVideo(item: any) {
   const content = (item.content || item["content:encoded"] || item.description || "").toLowerCase();
   
   if (item['yt:videoId']) return `https://www.youtube.com/embed/${item['yt:videoId']}`;
@@ -469,32 +459,6 @@ function extractVideoUrl(item: any) {
   return null;
 }
 
-function cleanXmlContent(xml: string): string {
-  let cleaned = xml;
-  // 1. Fix unescaped ampersands in titles/descriptions (common in brittle Italian feeds)
-  cleaned = cleaned.replace(/&(?!(?:[a-zA-Z0-9]+|#[0-9]+|#x[0-9a-fA-F]+);)/g, '&amp;');
-  
-  // 2. Fix unquoted attributes
-  cleaned = cleaned.replace(/<([a-zA-Z0-9:_.-]+)\s+([^>]*?)\s*>/g, (match, tagName, attrs) => {
-    const sanitizedAttrs = attrs.replace(/([a-zA-Z0-9:_.-]+)(?!=)(\s|$)/g, '$1=""$2');
-    return `<${tagName} ${sanitizedAttrs}>`;
-  });
-
-  // 2.5 Fix numeric attribute names (XML doesn't allow them, but some feeds use them)
-  cleaned = cleaned.replace(/(\s)([0-9][a-zA-Z0-9:_.-]*=)/g, '$1attr_$2');
-  cleaned = cleaned.replace(/(\s[a-zA-Z0-9:_.-]+)\s*=\s*(["'])/g, '$1=$2');
-
-  // 3. Ensure HTML content within RSS tags is wrapped in CDATA if it contains tags
-  cleaned = cleaned.replace(/<(title|description|content:encoded)>([\s\S]*?)<\/\1>/g, (match, tag, content) => {
-    if (content.includes('<') && !content.trim().startsWith('<![CDATA[')) {
-      return `<${tag}><![CDATA[${content}]]></${tag}>`;
-    }
-    return match;
-  });
-
-  return cleaned;
-}
-
 interface NewsItem {
   id: string;
   title: string;
@@ -511,6 +475,8 @@ interface NewsItem {
 app.get("/api/news", async (req, res) => {
   const { url, category, source } = req.query;
   try {
+    // Instead of direct parser.parseURL(url) which can be blocked, 
+    // fetch XML manually with browser headers then parse string.
     const response = await fetch(url as string, {
       headers: {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
@@ -520,73 +486,23 @@ app.get("/api/news", async (req, res) => {
     });
 
     if (!response.ok) throw new Error(`HTTP ${response.status} when fetching feed`);
-    let rawXml = await response.text();
+    const xml = await response.text();
+    const feed = await parser.parseString(xml);
     
-    // GAMESPULSE UPGRADE: Clean and normalize XML string before parsing
-    const xml = cleanXmlContent(rawXml);
-
-    let items: NewsItem[] = [];
-    
-    try {
-      // Primary Parser: Rss-Parser
-      const feed = await parser.parseString(xml);
-      items = feed.items.map((item) => {
-        return {
-          id: item.guid || item.link || Math.random().toString(),
-          title: item.title,
-          url: item.link,
-          summary: (item.contentSnippet || item.summary || "").substring(0, 200) + "...",
-          category: category as string,
-          source: source as string,
-          imageUrl: extractImageUrl(item),
-          videoUrl: extractVideoUrl(item),
-          time: item.pubDate ? new Date(item.pubDate).toLocaleTimeString() : new Date().toLocaleTimeString(),
-          timestamp: item.pubDate ? new Date(item.pubDate).getTime() : Date.now()
-        };
-      });
-    } catch (parseError) {
-      // GAMESPULSE UPGRADE: Cheerio Fallback for brittle feeds that still fail XML parsing
-      console.warn(`[RSS Parser] Fallback to Cheerio for ${url}`);
-      const $ = cheerio.load(xml, { xmlMode: true });
-      $('item, entry').each((i, el) => {
-        const $el = $(el);
-        const title = $el.find('title').text();
-        const link = $el.find('link').attr('href') || $el.find('link').text() || $el.find('link').attr('url');
-        const pubDate = $el.find('pubDate, published, updated').text();
-        const content = $el.find('description, content\\:encoded, summary').text();
-        const guid = $el.find('guid, id').text();
-        
-        let image = null;
-        const enclosure = $el.find('enclosure').attr('url');
-        const mediaContent = $el.find('media\\:content, content').attr('url');
-        const mediaThumbnail = $el.find('media\\:thumbnail, thumbnail').attr('url');
-        const ogImage = $el.find('og\\:image').text();
-        
-        if (enclosure) image = enclosure;
-        else if (mediaContent) image = mediaContent;
-        else if (mediaThumbnail) image = mediaThumbnail;
-        else if (ogImage) image = ogImage;
-        else {
-          const imgMatch = content.match(/<img[^>]+(?:src|data-src|srcset)="([^"> ]+)"/);
-          if (imgMatch) image = imgMatch[1];
-        }
-
-        if (title && link) {
-          items.push({
-            id: guid || link || Math.random().toString(),
-            title,
-            url: link,
-            summary: content.replace(/<[^>]*>?/gm, '').substring(0, 200) + "...",
-            category: category as string,
-            source: source as string,
-            imageUrl: image,
-            videoUrl: extractVideoUrl({ content }),
-            time: pubDate ? new Date(pubDate).toLocaleTimeString() : new Date().toLocaleTimeString(),
-            timestamp: pubDate ? new Date(pubDate).getTime() : Date.now()
-          });
-        }
-      });
-    }
+    let items: NewsItem[] = feed.items.map((item) => {
+      return {
+        id: item.guid || item.link || Math.random().toString(),
+        title: item.title,
+        url: item.link,
+        summary: (item.contentSnippet || item.summary || "").substring(0, 200) + "...",
+        category: category as string,
+        source: source as string,
+        imageUrl: extractImage(item),
+        videoUrl: extractVideo(item),
+        time: item.pubDate ? new Date(item.pubDate).toLocaleTimeString() : new Date().toLocaleTimeString(),
+        timestamp: item.pubDate ? new Date(item.pubDate).getTime() : Date.now()
+      };
+    });
 
     // Deep enhancement for items without media (max 10 per feed to keep it fast)
     const newsToEnhance = items.filter(item => !item.imageUrl || !item.videoUrl).slice(0, 10);
