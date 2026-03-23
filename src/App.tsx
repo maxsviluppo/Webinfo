@@ -334,6 +334,19 @@ function NewsCard({
                   <Heart className={`w-4 h-4 ${favorites[currentItem.id] ? 'fill-current' : ''}`} />
                 </button>
               </motion.div>
+              
+              <motion.p
+                variants={{
+                  hidden: { opacity: 0 },
+                  visible: { 
+                    opacity: 1, 
+                    transition: { delay: 0.8, duration: 0.5 }
+                  }
+                }}
+                className="text-white/20 text-[9px] font-bold uppercase tracking-[0.2em] text-center mt-6"
+              >
+                Premi l'immagine per vedere il sito
+              </motion.p>
             </motion.div>
           </div>
         </div>
