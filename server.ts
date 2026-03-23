@@ -6,11 +6,14 @@ import cors from "cors";
 import Parser from "rss-parser";
 import * as cheerio from "cheerio";
 
-const SEO_FILE = path.join(process.cwd(), "seo_configs.json");
-const SOURCES_FILE = path.join(process.cwd(), "news_sources.json");
-const ANALYTICS_FILE = path.join(process.cwd(), "analytics_config.json");
-const TRAFFIC_FILE = path.join(process.cwd(), "traffic_stats.json");
-const ADSENSE_FILE = path.join(process.cwd(), "adsense_config.json");
+const DATA_DIR = path.join(process.cwd(), ".data");
+if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
+
+const SEO_FILE = path.join(DATA_DIR, "seo_configs.json");
+const SOURCES_FILE = path.join(DATA_DIR, "news_sources.json");
+const ANALYTICS_FILE = path.join(DATA_DIR, "analytics_config.json");
+const TRAFFIC_FILE = path.join(DATA_DIR, "traffic_stats.json");
+const ADSENSE_FILE = path.join(DATA_DIR, "adsense_config.json");
 
 // Default SEO data
 const DEFAULT_SEO = {
@@ -174,7 +177,9 @@ function injectMetadata(html: string, config: any, analytics: any, adsense: any,
     </script>
   ` : '';
 
-  const adsenseScript = (adsense.enabled && adsense.script) ? adsense.script : '';
+  const adsenseScript = (adsense.enabled && adsense.script && adsense.script.trim().startsWith('<')) ? adsense.script : '';
+  const adsenseMeta = (adsense.enabled && adsense.metaTag && adsense.metaTag.trim().startsWith('<')) ? adsense.metaTag : '';
+  const analyticsMeta = (analytics.enabled && analytics.verificationTag && analytics.verificationTag.trim().startsWith('<')) ? analytics.verificationTag : '';
 
   let injected = html;
   
@@ -190,8 +195,8 @@ function injectMetadata(html: string, config: any, analytics: any, adsense: any,
     <meta property="og:type" content="website" />
     <meta property="og:url" content="https://spotsmart.it${reqUrl}" />
     <link rel="canonical" href="https://spotsmart.it${reqUrl}" />
-    ${analytics.verificationTag || ''}
-    ${adsense.metaTag || ''}
+    ${analyticsMeta}
+    ${adsenseMeta}
     ${adsenseScript}
     ${gaScript}
   `;
@@ -501,6 +506,13 @@ app.post("/api/admin/adsense", express.json(), (req, res) => {
   res.send("Saved Successfully");
 });
 
+// AdSense ads.txt serving
+app.get("/ads.txt", (req, res) => {
+  const adsense = getAdSense();
+  res.type("text/plain");
+  res.send(adsense.adsTxt || "");
+});
+
 // Real Traffic API
 app.get("/api/admin/traffic", (req, res) => {
   res.json(memoryTraffic);
@@ -511,7 +523,12 @@ async function startServer() {
   
   if (process.env.NODE_ENV !== "production") {
     const vite = await createViteServer({
-      server: { middlewareMode: true },
+      server: { 
+        middlewareMode: true,
+        watch: {
+          ignored: ['**/.data/**', '**/traffic_stats.json', '**/adsense_config.json', '**/seo_configs.json', '**/analytics_config.json', '**/news_sources.json']
+        }
+      },
       appType: "custom", // Changed to custom to handle index.html manually
     });
     app.use(vite.middlewares);
@@ -528,6 +545,9 @@ async function startServer() {
         const analytics = getAnalytics();
         const adsense = getAdSense();
         
+        // Track the visit realserver-side
+        recordVisit();
+
         const html = injectMetadata(template, config, analytics, adsense, url);
         res.status(200).set({ 'Content-Type': 'text/html' }).end(html);
       } catch (e) {
@@ -545,6 +565,9 @@ async function startServer() {
       const analytics = getAnalytics();
       const adsense = getAdSense();
       
+      // Track real visit
+      recordVisit();
+
       const template = fs.readFileSync(path.join(distPath, "index.html"), "utf-8");
       const html = injectMetadata(template, config, analytics, adsense, req.originalUrl);
       
