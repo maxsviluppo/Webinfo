@@ -308,7 +308,7 @@ function NewsCard({
                 className="flex items-center gap-4 pt-2"
               >
                 <div className="flex items-center gap-2">
-                  <span className={`px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-widest border ${selectedCategoryData?.border || 'border-white/20'} ${selectedCategoryData?.color || 'bg-white/10'} text-white shadow-[0_0_15px_rgba(255,255,255,0.1)] opacity-0 hover:opacity-100 transition-opacity duration-300 pointer-events-auto`}>
+                  <span className={`px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-widest border ${selectedCategoryData?.border || 'border-white/20'} ${selectedCategoryData?.color || 'bg-white/10'} text-white shadow-[0_0_15px_rgba(255,255,255,0.1)]`}>
                     {currentItem.category}
                   </span>
                   {favorites[currentItem.id] && (
@@ -321,7 +321,7 @@ function NewsCard({
                     </motion.div>
                   )}
                 </div>
-                <span className="text-[10px] font-bold text-white/40 uppercase tracking-widest opacity-0 hover:opacity-100 transition-opacity duration-300 pointer-events-auto ml-auto">
+                <span className="text-[10px] font-bold text-white/40 uppercase tracking-widest ml-auto">
                   {currentItem.source} • {currentItem.time}
                 </span>
                 <button
@@ -693,20 +693,38 @@ export default function App() {
     setLoading(true);
     setNewsItems([]); 
     
-    // 1. Uniform Initial Loading: Load the FIRST feed from EACH category initially
+    // 1. Uniform Initial Loading: Load up to 10 feeds from EACH category initially
     const categoriesToLoad = CATEGORIES.filter(c => c.id !== 'all');
-    const firstFeedsPerCat = categoriesToLoad.map(cat => {
-      return FEEDS.find(f => f.cat === cat.label) || FEEDS[0];
-    }).filter((v, i, a) => a.findIndex(t => (t.url === v.url)) === i); // Unique feeds
+    let initialFeeds: typeof FEEDS = [];
     
-    const initialResults = await Promise.all(firstFeedsPerCat.map(feed => fetchSingleFeed(feed)));
-    const initialItems = initialResults.flat().sort(() => Math.random() - 0.5);
+    categoriesToLoad.forEach(cat => {
+      const catFeeds = FEEDS.filter(f => f.cat === cat.label).slice(0, 10);
+      initialFeeds = [...initialFeeds, ...catFeeds];
+    });
     
-    setNewsItems(initialItems);
+    // Remove duplicates
+    initialFeeds = initialFeeds.filter((v, i, a) => a.findIndex(t => (t.url === v.url)) === i);
+    
+    // Process initial feeds in small concurrent batches for speed without hanging
+    const initialBatchSize = 15;
+    for (let i = 0; i < initialFeeds.length; i += initialBatchSize) {
+      const batch = initialFeeds.slice(i, i + initialBatchSize);
+      const results = await Promise.all(batch.map(feed => fetchSingleFeed(feed)));
+      const items = results.flat();
+      
+      setNewsItems(prev => {
+        const existingIds = new Set(prev.map(item => item.id));
+        const newItems = items.filter(item => !existingIds.has(item.id));
+        const updated = [...prev, ...newItems].sort(() => Math.random() - 0.5);
+        if (updated.length > 0) setLoading(false); // Hide spinner as soon as we have some news
+        return updated;
+      });
+    }
+
     setLoading(false);
 
     // 2. Background loading: Process remaining feeds in batches of 10
-    const loadedUrls = new Set(firstFeedsPerCat.map(f => f.url));
+    const loadedUrls = new Set(initialFeeds.map(f => f.url));
     const remainingFeeds = FEEDS.filter(f => !loadedUrls.has(f.url));
     const batchSize = 10;
     
