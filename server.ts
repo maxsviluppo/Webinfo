@@ -9,6 +9,8 @@ import * as cheerio from "cheerio";
 const SEO_FILE = path.join(process.cwd(), "seo_configs.json");
 const SOURCES_FILE = path.join(process.cwd(), "news_sources.json");
 const ANALYTICS_FILE = path.join(process.cwd(), "analytics_config.json");
+const TRAFFIC_FILE = path.join(process.cwd(), "traffic_stats.json");
+const ADSENSE_FILE = path.join(process.cwd(), "adsense_config.json");
 
 // Default SEO data
 const DEFAULT_SEO = {
@@ -74,8 +76,6 @@ const DEFAULT_SEO = {
   }
 };
 
-const ADSENSE_FILE = path.join(process.cwd(), "adsense_config.json");
-
 // Default AdSense data
 const DEFAULT_ADSENSE = {
   enabled: false,
@@ -110,7 +110,44 @@ function getSources() {
 }
 function saveSources(sources: any) { fs.writeFileSync(SOURCES_FILE, JSON.stringify(sources, null, 2)); }
 
+// Memory Buffers for Traffic to prevent Watcher Loops
+let memoryTraffic = { total: 0, today: 0, lastUpdate: new Date().toDateString(), history: {} };
+try {
+  const data = JSON.parse(fs.readFileSync(TRAFFIC_FILE, "utf-8"));
+  if (data.lastUpdate === memoryTraffic.lastUpdate) {
+     memoryTraffic = data;
+  } else {
+     memoryTraffic = { ...data, today: 0, lastUpdate: memoryTraffic.lastUpdate };
+  }
+} catch (e) {}
+let isTrafficDirty = false;
 
+function recordVisit() {
+  const today = new Date().toDateString();
+  if (memoryTraffic.lastUpdate !== today) {
+     memoryTraffic.today = 0;
+     memoryTraffic.lastUpdate = today;
+  }
+  memoryTraffic.total += 1;
+  memoryTraffic.today += 1;
+  memoryTraffic.history[today] = (memoryTraffic.history[today] || 0) + 1;
+  isTrafficDirty = true;
+  return memoryTraffic;
+}
+
+// Persist to disk every 30 seconds if dirty, to avoid triggering watchers constantly
+setInterval(() => {
+  if (isTrafficDirty) {
+    try {
+      fs.writeFileSync(TRAFFIC_FILE, JSON.stringify(memoryTraffic, null, 2));
+      isTrafficDirty = false;
+    } catch (e) {
+      console.error("[Traffic] Failed to persist stats:", e);
+    }
+  }
+}, 30000);
+
+// Global app object
 const app = express();
 const parser = new Parser({
   customFields: {
@@ -159,6 +196,7 @@ function injectMetadata(html: string, config: any, analytics: any, adsense: any,
     ${gaScript}
   `;
 
+  recordVisit();
   return injected.replace(/<\/head>/i, `${seoTags}</head>`);
 }
 
@@ -352,23 +390,37 @@ function extractVideo(item: any) {
   return null;
 }
 
+interface NewsItem {
+  id: string;
+  title: string;
+  url: string;
+  summary: string;
+  category: string;
+  source: string;
+  imageUrl: string | null;
+  videoUrl: string | null;
+  time: string;
+  timestamp: number;
+}
+
 app.get("/api/news", async (req, res) => {
   const { url, category, source } = req.query;
   if (!url) return res.status(400).send("Feed URL is required");
 
   try {
     const feed = await parser.parseURL(url as string);
-    let items = feed.items.map((item) => {
+    let items: NewsItem[] = feed.items.map((item) => {
       return {
         id: item.guid || item.link || Math.random().toString(),
         title: item.title,
         url: item.link,
         summary: (item.contentSnippet || item.summary || "").substring(0, 200) + "...",
-        category: category,
-        source: source,
+        category: category as string,
+        source: source as string,
         imageUrl: extractImage(item),
         videoUrl: extractVideo(item),
-        time: item.pubDate ? new Date(item.pubDate).toLocaleTimeString() : new Date().toLocaleTimeString()
+        time: item.pubDate ? new Date(item.pubDate).toLocaleTimeString() : new Date().toLocaleTimeString(),
+        timestamp: item.pubDate ? new Date(item.pubDate).getTime() : Date.now()
       };
     });
 
@@ -426,12 +478,32 @@ app.post("/api/admin/analytics", express.json(), (req, res) => {
   res.send("Saved");
 });
 
-app.get("/api/admin/adsense", (req, res) => res.json(getAdSense()));
+app.get("/api/admin/adsense", (req, res) => {
+  const data = getAdSense();
+  console.log(`[AdSense] GET Config: ${data.enabled ? 'Enabled' : 'Disabled'}`);
+  res.json(data);
+});
+
 app.post("/api/admin/adsense", express.json(), (req, res) => {
   const { auth, data } = req.body;
-  if (auth?.username !== 'admin' || auth?.password !== 'accessometti') return res.status(401).send("Unauthorized");
+  if (auth?.username !== 'admin' || auth?.password !== 'accessometti') {
+    console.warn("[AdSense] Unauthorized save attempt blocked");
+    return res.status(401).send("Unauthorized");
+  }
+  
+  if (!data) {
+    console.warn("[AdSense] Missing data in POST request");
+    return res.status(400).send("No data provided");
+  }
+
+  console.log("[AdSense] Successfully saving new configuration to JSON");
   saveAdSense(data);
-  res.send("Saved");
+  res.send("Saved Successfully");
+});
+
+// Real Traffic API
+app.get("/api/admin/traffic", (req, res) => {
+  res.json(memoryTraffic);
 });
 
 async function startServer() {

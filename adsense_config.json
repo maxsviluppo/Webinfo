@@ -1,0 +1,7 @@
+{
+  "enabled": true,
+  "client": "test-client",
+  "script": "test-script",
+  "adsTxt": "<meta name=\"google-adsense-account\" content=\"ca-pub-1385801472165821\">",
+  "metaTag": "test-meta"
+}
