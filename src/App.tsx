@@ -169,13 +169,18 @@ function NewsCard({
 
   const getIframeUrl = (url: string) => {
     const secureUrl = ensureHttps(url);
-    // Explicitly proxy sites known to have strict X-Frame-Options
-    const blockedSites = ['tgcom24', 'mediaset', 'ansa.it', 'cnbc', 'bbc', 'repubblica', 'gazzetta', 'reuters'];
+    // Explicitly proxy sites known to have strict X-Frame-Options or those that commonly block iframes
+    const blockedSites = [
+      'tgcom24', 'mediaset', 'ansa.it', 'cnbc', 'bbc', 'repubblica', 'gazzetta', 
+      'reuters', 'ilsole24ore', 'corriere', 'lastampa', 'wired', 'hdblog', 
+      'dday', 'tomshw', 'punto-informatico', 'leganerd', 'macitynet', 
+      'theverge', 'techcrunch', 'technologyreview', 'ft.com', 'bloomberg'
+    ];
     const requiresProxy = blockedSites.some(site => secureUrl.toLowerCase().includes(site));
     
     if (requiresProxy) {
-       // Switch to codetabs using the correct parameter 'quest=' and no trailing slash
-       return `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(secureUrl)}`;
+       // Use corsproxy.io which is more reliable for rendering HTML in iframes than codetabs
+       return `https://corsproxy.io/?${encodeURIComponent(secureUrl)}`;
     }
     return secureUrl;
   };
