@@ -1,0 +1,16 @@
+{
+  "version": 2,
+  "buildCommand": "vite build",
+  "outputDirectory": "dist",
+  "rewrites": [
+    { "source": "/ads.txt", "destination": "/api/ads" },
+    { "source": "/api/admin/adsense", "destination": "/api/admin-adsense" },
+    { "source": "/api/admin/analytics", "destination": "/api/admin-analytics" },
+    { "source": "/api/admin/traffic", "destination": "/api/admin-traffic" },
+    { "source": "/api/admin/seo", "destination": "/api/admin-seo" },
+    { "source": "/api/admin/sources", "destination": "/api/admin-sources" },
+    { "source": "/api/news", "destination": "/api/news" },
+    { "source": "/api/proxy", "destination": "/api/proxy" },
+    { "source": "/(.*)", "destination": "/index.html" }
+  ]
+}

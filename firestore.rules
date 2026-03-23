@@ -107,5 +107,17 @@ service cloud.firestore {
       allow read, write: if true;
     }
 
+    // Admin Configs (AdSense, Analytics) - Public read for injection, write needs auth
+    match /configs/{configId} {
+      allow read: if true;
+      allow write: if isAuthenticated();
+    }
+
+    // Traffic Stats - Public read for dashboard, write from server
+    match /traffic/{docId} {
+      allow read: if true;
+      allow write: if true; // Server-side writes (no auth token available in API funcs)
+    }
+
   }
 }

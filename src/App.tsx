@@ -495,19 +495,32 @@ export default function App() {
     };
   }, [realTraffic]);
 
-  // Fetch Real Traffic Stats
+  // Fetch Real Traffic Stats direct from Firestore (works on Vercel too)
   useEffect(() => {
     const fetchTraffic = async () => {
       try {
-        const res = await fetch('/api/admin/traffic');
-        const data = await res.json();
-        setRealTraffic({ today: data.today, total: data.total });
+        const snap = await getDoc(doc(db, 'traffic', 'stats'));
+        if (snap.exists()) {
+          const data = snap.data();
+          const today = new Date().toDateString();
+          setRealTraffic({
+            today: data.lastUpdate === today ? (data.today || 0) : 0,
+            total: data.total || 0
+          });
+        }
       } catch (e) {
-        console.error("Traffic fetch failed:", e);
+        // Fallback to local API
+        try {
+          const res = await fetch('/api/admin/traffic');
+          const data = await res.json();
+          setRealTraffic({ today: data.today, total: data.total });
+        } catch (e2) {
+          console.error('Traffic fetch failed:', e2);
+        }
       }
     };
     fetchTraffic();
-    const interval = setInterval(fetchTraffic, 30000); // Update every 30s
+    const interval = setInterval(fetchTraffic, 30000);
     return () => clearInterval(interval);
   }, []);
 
@@ -627,17 +640,15 @@ export default function App() {
 
   // Load Analytics Config
   useEffect(() => {
-    // Fetch Analytics
-    fetch('/api/admin/analytics')
-      .then(res => res.json())
-      .then(data => setAnalyticsConfig(data))
-      .catch(err => console.error("Failed to fetch analytics:", err));
+    // Fetch Analytics from Firestore first (always works), fallback to API
+    getDoc(doc(db, 'configs', 'analytics'))
+      .then(snap => { if (snap.exists()) setAnalyticsConfig(snap.data()); })
+      .catch(() => fetch('/api/admin-analytics').then(r => r.json()).then(setAnalyticsConfig).catch(() => {}));
 
-    // Fetch AdSense
-    fetch('/api/admin/adsense')
-      .then(res => res.json())
-      .then(data => setAdsenseConfig(data))
-      .catch(err => console.error("Failed to fetch adsense:", err));
+    // Fetch AdSense from Firestore first (always works), fallback to API
+    getDoc(doc(db, 'configs', 'adsense'))
+      .then(snap => { if (snap.exists()) setAdsenseConfig(snap.data()); })
+      .catch(() => fetch('/api/admin-adsense').then(r => r.json()).then(setAdsenseConfig).catch(() => {}));
   }, []);
 
   const handleAdminLogin = (e: React.FormEvent) => {
