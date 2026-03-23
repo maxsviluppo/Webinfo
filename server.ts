@@ -111,6 +111,7 @@ const parser = new Parser({
 // Helper for SEO Injection
 function injectMetadata(html: string, config: any, analytics: any, reqUrl: string) {
   const gaScript = (analytics.enabled && analytics.trackingId) ? `
+    <!-- Google tag (gtag.js) -->
     <script async src="https://www.googletagmanager.com/gtag/js?id=${analytics.trackingId}"></script>
     <script>
       window.dataLayer = window.dataLayer || [];
