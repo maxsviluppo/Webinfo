@@ -1,5 +1,5 @@
 {
   "trackingId": "G-MG0R146TVD",
   "enabled": true,
-  "verificationTag": "<!-- Google tag (gtag.js) -->\n<script async src=\"https://www.googletagmanager.com/gtag/js?id=G-MG0R146TVD\"></script>\n<script>\n  window.dataLayer = window.dataLayer || [];\n  function gtag(){dataLayer.push(arguments);}\n  gtag('js', new Date());\n\n  gtag('config', 'G-MG0R146TVD');\n</script>"
+  "verificationTag": "<meta name=\"google-site-verification\" content=\"JSSSnE-LXmAHyRKY261A6NGwa8zPoAa3y3-sO6HM9QM\" />"
 }
