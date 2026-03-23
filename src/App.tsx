@@ -5,7 +5,7 @@
 
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Newspaper, TrendingUp, Clock, Share2, ExternalLink, Menu, X, Settings, User as UserIcon, Heart, LogOut, BookOpen, LayoutGrid, Globe, Cpu, Music, Gamepad2, Palette, FlaskConical, Search, RefreshCw, Info, Send, Trophy, MapPin } from 'lucide-react';
+import { Newspaper, TrendingUp, Clock, Share2, ExternalLink, Menu, X, Settings, User as UserIcon, Heart, LogOut, BookOpen, LayoutGrid, Globe, Cpu, Music, Gamepad2, Palette, FlaskConical, Search, RefreshCw, Info, Send, Trophy, MapPin, Plus, Stethoscope } from 'lucide-react';
 import { auth, loginWithGoogle, logout, onAuthStateChanged, db, handleFirestoreError, OperationType, User } from './firebase';
 import { collection, doc, setDoc, deleteDoc, onSnapshot, query, where, Timestamp, getDoc } from 'firebase/firestore';
 
@@ -24,37 +24,24 @@ interface NewsItem {
 const variants = {
   enter: (direction: number) => ({
     x: direction > 0 ? '100%' : '-100%',
-    opacity: 0,
-    scale: 0.95,
-    rotateY: direction > 0 ? 30 : -30,
-    filter: 'blur(10px)',
+    opacity: 1,
   }),
   center: {
     zIndex: 1,
     x: 0,
     opacity: 1,
-    scale: 1,
-    rotateY: 0,
-    filter: 'blur(0px)',
     transition: {
-      x: { type: "spring", stiffness: 250, damping: 28 },
-      opacity: { duration: 0.3 },
-      scale: { duration: 0.4, ease: "easeOut" },
-      rotateY: { type: "spring", stiffness: 200, damping: 25 },
-      filter: { duration: 0.3 }
+      x: { type: "spring", stiffness: 300, damping: 30 },
+      opacity: { duration: 0 }
     }
   },
   exit: (direction: number) => ({
     zIndex: 0,
     x: direction < 0 ? '100%' : '-100%',
-    opacity: 0,
-    scale: 0.95,
-    rotateY: direction < 0 ? 30 : -30,
-    filter: 'blur(10px)',
+    opacity: 1,
     transition: {
-      x: { type: "spring", stiffness: 250, damping: 28 },
-      opacity: { duration: 0.2 },
-      filter: { duration: 0.2 }
+      x: { type: "spring", stiffness: 300, damping: 30 },
+      opacity: { duration: 0 }
     }
   })
 };
@@ -125,7 +112,19 @@ const FEEDS = [
   // Cultura - Global
   { url: "https://www.newyorker.com/feed/culture", cat: "Cultura", name: "The New Yorker (Culture)" },
   { url: "https://www.openculture.com/feed", cat: "Cultura", name: "Open Culture" },
-  { url: "https://www.bbc.com/culture/feed.rss", cat: "Cultura", name: "BBC Culture" }
+  { url: "https://www.bbc.com/culture/feed.rss", cat: "Cultura", name: "BBC Culture" },
+  // Salute
+  { url: "https://www.fondazioneveronesi.it/magazine/rss", cat: "Salute", name: "Fondazione Veronesi" },
+  { url: "https://www.dica33.it/rss/news.xml", cat: "Salute", name: "Dica33" },
+  { url: "http://www.quotidianosanita.it/rss/rss.php", cat: "Salute", name: "Quotidianosanità" },
+  { url: "https://www.iss.it/news/-/asset_publisher/987654321/rss", cat: "Salute", name: "ISS News" },
+  { url: "https://www.ansa.it/canale_saluteebenessere/notizie/sanita_rss.xml", cat: "Salute", name: "Salute Lab (ANSA)" },
+  { url: "https://www.humanitasalute.it/feed/", cat: "Salute", name: "Humanitas Salute" },
+  { url: "https://www.medicalnewstoday.com/rss", cat: "Salute", name: "Medical News Today" },
+  { url: "https://www.who.int/rss-feeds/news-english.xml", cat: "Salute", name: "WHO (OMS)" },
+  { url: "https://www.sciencedaily.com/rss/health_medicine.xml", cat: "Salute", name: "ScienceDaily (Health)" },
+  { url: "https://www.youtube.com/feeds/videos.xml?channel_id=UC6P0M6qRz6f0M6qRz6f0M6q", cat: "Salute", name: "Pillole di Salute" },
+  { url: "https://www.youtube.com/feeds/videos.xml?channel_id=UCX0S2H6_i9P_Z_I8J_8J_A", cat: "Salute", name: "Ospedale Bambino Gesù" }
 ];
 
 const CATEGORIES = [
@@ -138,16 +137,272 @@ const CATEGORIES = [
   { id: 'sport', label: 'Sport', icon: Trophy, color: 'bg-red-600', border: 'border-red-400/30' },
   { id: 'scienza', label: 'Scienza', icon: FlaskConical, color: 'bg-slate-700', border: 'border-slate-500/30' },
   { id: 'cultura', label: 'Cultura', icon: Palette, color: 'bg-pink-600', border: 'border-pink-400/30' },
+  { id: 'salute', label: 'Salute', icon: Stethoscope, color: 'bg-emerald-600', border: 'border-emerald-500/30' },
 ];
+
+function NewsCard({ 
+  currentItem, 
+  direction, 
+  displayedNews, 
+  currentIndex, 
+  setCurrentIndex, 
+  setDirection, 
+  favorites, 
+  toggleFavorite, 
+  user, 
+  selectedCategoryData,
+  variants,
+  isFlipped,
+  setIsFlipped
+}: any) {
+  const [isFlippedLocal, setIsFlippedLocal] = useState(false);
+  
+  // Use local state if prop is not provided, for flexibility
+  const flipped = isFlipped !== undefined ? isFlipped : isFlippedLocal;
+  const setFlipped = setIsFlipped !== undefined ? setIsFlipped : setIsFlippedLocal;
+
+  const ensureHttps = (url: string) => {
+    if (!url) return url;
+    if (url.startsWith('http://')) return url.replace('http://', 'https://');
+    return url;
+  };
+
+  const getIframeUrl = (url: string) => {
+    const secureUrl = ensureHttps(url);
+    // Use a proxy ONLY for sites known to block iframes or if requested indirectly
+    // but for now, we'll use direct link plus a fallback button
+    return secureUrl;
+  };
+
+  return (
+    <motion.div
+      key={currentItem.id}
+      custom={direction}
+      variants={variants}
+      initial="enter"
+      exit="exit"
+      drag={!flipped ? "x" : false}
+      dragConstraints={{ left: 0, right: 0 }}
+      dragElastic={0.4}
+      onDragEnd={(e, { offset, velocity }) => {
+        const swipe = Math.abs(offset.x) > 50 || Math.abs(velocity.x) > 200;
+        if (swipe) {
+          const nextIndex = (currentIndex + (offset.x > 0 ? -1 : 1) + displayedNews.length) % displayedNews.length;
+          setDirection(offset.x > 0 ? -1 : 1);
+          setCurrentIndex(nextIndex);
+          setIsFlipped(false);
+        }
+      }}
+      animate="center"
+      className="absolute inset-0 flex flex-col perspective-1000"
+    >
+      <motion.div
+        animate={{ rotateY: flipped ? 180 : 0 }}
+        transition={{ duration: 0.6, type: 'spring', stiffness: 260, damping: 20 }}
+        style={{ transformStyle: 'preserve-3d' }}
+        className="relative w-full h-full"
+      >
+        {/* Front Side */}
+        <div 
+          className="absolute inset-0 flex flex-col preserve-3d"
+          style={{ backfaceVisibility: 'hidden', WebkitBackfaceVisibility: 'hidden', transform: 'translateZ(1px)', pointerEvents: flipped ? 'none' : 'auto' }}
+          onClick={() => setFlipped(true)}
+        >
+          <div className="absolute inset-x-0 top-0 h-[70%] z-0 bg-black overflow-hidden">
+            {currentItem.videoUrl ? (
+              <video
+                src={currentItem.videoUrl}
+                autoPlay
+                loop
+                muted
+                playsInline
+                className="w-full h-full object-cover opacity-80 scale-150 origin-top"
+              />
+            ) : (
+              <div className="relative w-full h-full scale-150 origin-top">
+                <img 
+                  src={currentItem.imageUrl} 
+                  alt={currentItem.title}
+                  referrerPolicy="no-referrer"
+                  className="absolute inset-0 w-full h-full object-cover object-top blur-2xl opacity-40 scale-110"
+                />
+                <img 
+                  src={currentItem.imageUrl} 
+                  alt={currentItem.title}
+                  referrerPolicy="no-referrer"
+                  className="relative w-full h-full object-contain object-top z-10"
+                />
+              </div>
+            )}
+            <div className="absolute inset-x-0 bottom-0 h-[80%] z-20 pointer-events-none bg-gradient-to-t from-black via-black/90 to-transparent opacity-100" />
+            <div className="absolute inset-x-0 bottom-0 h-1/2 z-20 pointer-events-none bg-gradient-to-t from-black to-transparent opacity-100" />
+            <div className="absolute inset-0 z-20 pointer-events-none shadow-[inset_0_-250px_200px_-100px_rgba(0,0,0,1)]" />
+          </div>
+
+          <div className="relative z-20 flex-1 flex flex-col justify-end p-8 md:p-16 pt-0 pb-28 md:pb-36 mt-0">
+            <motion.div 
+              initial="hidden"
+              animate="visible"
+              variants={{
+                hidden: { opacity: 0 },
+                visible: {
+                  opacity: 1,
+                  transition: {
+                    staggerChildren: 0.15,
+                    delayChildren: 0.2
+                  }
+                }
+              }}
+              className="max-w-2xl space-y-4"
+            >
+              <div className="overflow-hidden">
+                <h2 className="text-3xl md:text-5xl font-black text-white leading-tight tracking-tighter uppercase flex flex-wrap gap-x-3">
+                  {currentItem.title.split(' ').map((word: string, i: number) => (
+                    <motion.span
+                      key={i}
+                      variants={{
+                        hidden: { y: "100%", opacity: 0, filter: 'blur(10px)' },
+                        visible: { 
+                          y: 0, 
+                          opacity: 1, 
+                          filter: 'blur(0px)',
+                          transition: { type: "spring", stiffness: 200, damping: 20 }
+                        }
+                      }}
+                      className="inline-block"
+                    >
+                      {word}
+                    </motion.span>
+                  ))}
+                </h2>
+              </div>
+              
+              <motion.div
+                variants={{
+                  hidden: { opacity: 0, x: -30 },
+                  visible: { 
+                    opacity: 1, 
+                    x: 0,
+                    transition: { duration: 0.8, ease: [0.16, 1, 0.3, 1] }
+                  }
+                }}
+                className="relative"
+              >
+                <div className="absolute left-0 top-0 bottom-0 w-1 bg-gradient-to-b from-pink-500 to-purple-600 shadow-[0_0_10px_rgba(236,72,153,0.5)]" />
+                <p className="text-lg md:text-xl text-white/90 font-medium leading-tight pl-6 drop-shadow-md italic line-clamp-8 max-w-md">
+                  {currentItem.summary}
+                </p>
+              </motion.div>
+
+              <motion.div
+                variants={{
+                  hidden: { opacity: 0, scale: 0.8 },
+                  visible: { 
+                    opacity: 1, 
+                    scale: 1,
+                    transition: { delay: 0.6, duration: 0.4 }
+                  }
+                }}
+                className="flex items-center gap-4 pt-2"
+              >
+                <div className="flex items-center gap-2">
+                  <span className={`px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-widest border ${selectedCategoryData?.border || 'border-white/20'} ${selectedCategoryData?.color || 'bg-white/10'} text-white shadow-[0_0_15px_rgba(255,255,255,0.1)]`}>
+                    {currentItem.category}
+                  </span>
+                  {favorites[currentItem.id] && (
+                    <motion.div
+                      initial={{ scale: 0, rotate: -45 }}
+                      animate={{ scale: 1, rotate: 0 }}
+                      className="w-6 h-6 rounded-full bg-pink-500 flex items-center justify-center shadow-[0_0_15px_rgba(236,72,153,0.6)]"
+                    >
+                      <Heart className="w-3 h-3 text-white fill-white" />
+                    </motion.div>
+                  )}
+                </div>
+                <span className="text-[10px] font-bold text-white/40 uppercase tracking-widest">
+                  {currentItem.source} • {currentItem.time}
+                </span>
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    toggleFavorite(currentItem);
+                  }}
+                  className={`w-8 h-8 rounded-full flex items-center justify-center transition-all ${
+                    favorites[currentItem.id] ? 'bg-pink-500 text-white' : 'bg-white/10 text-white/60 hover:bg-white/20'
+                  }`}
+                >
+                  <Heart className={`w-4 h-4 ${favorites[currentItem.id] ? 'fill-current' : ''}`} />
+                </button>
+              </motion.div>
+            </motion.div>
+          </div>
+        </div>
+
+        {/* Back Side (Article Iframe) */}
+        <div 
+          className="absolute inset-0 bg-neutral-100 overflow-hidden flex flex-col"
+          style={{ backfaceVisibility: 'hidden', WebkitBackfaceVisibility: 'hidden', transform: 'rotateY(180deg)', pointerEvents: flipped ? 'auto' : 'none' }}
+        >
+          <div className="h-14 bg-white border-b border-black/5 flex items-center justify-between px-4 z-[120]">
+            <button 
+               onClick={(e) => {
+                 e.stopPropagation();
+                 setFlipped(false);
+               }}
+               className="w-10 h-10 rounded-full bg-black text-white hover:bg-neutral-800 transition-all flex items-center justify-center shadow-lg active:scale-90"
+            >
+              <X className="w-5 h-5" />
+            </button>
+            <div className="flex-1 px-4 truncate text-center">
+              <span className="text-xs font-bold text-black/60 uppercase tracking-widest truncate">{currentItem.source}</span>
+            </div>
+            <a 
+              href={currentItem.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="w-10 h-10 rounded-full bg-indigo-600 text-white hover:bg-indigo-700 transition-all flex items-center justify-center shadow-lg active:scale-90"
+              title="Apri nel browser"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <ExternalLink className="w-5 h-5" />
+            </a>
+          </div>
+          
+          <div className="flex-1 relative w-full h-full bg-white">
+            {!flipped ? null : (
+              <>
+                <div className="absolute inset-0 flex flex-col items-center justify-center p-8 text-center z-0 opacity-40">
+                  <RefreshCw className="w-8 h-8 animate-spin mb-4" />
+                  <p className="text-xs font-medium">Caricamento in corso...</p>
+                  <p className="text-[10px] mt-2 max-w-[200px]">Alcuni siti potrebbero bloccare la visualizzazione in questa app.</p>
+                </div>
+                <iframe 
+                  src={getIframeUrl(currentItem.url)} 
+                  className="relative z-10 w-full h-full border-none"
+                  title={currentItem.title}
+                  onError={() => {
+                    // This rarely triggers for cross-origin iframes but good to have
+                  }}
+                />
+              </>
+            )}
+          </div>
+        </div>
+      </motion.div>
+    </motion.div>
+  );
+}
 
 export default function App() {
   const [newsItems, setNewsItems] = useState<NewsItem[]>([]);
+  const [favorites, setFavorites] = useState<Record<string, any>>({});
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [user, setUser] = useState<User | null>(null);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [direction, setDirection] = useState(0);
+  const [isFlipped, setIsFlipped] = useState(false);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
-  const [user, setUser] = useState<User | null>(null);
-  const [favorites, setFavorites] = useState<Record<string, any>>({});
   const [showFavoritesOnly, setShowFavoritesOnly] = useState(false);
   const [isCategoryMenuOpen, setIsCategoryMenuOpen] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
@@ -179,25 +434,25 @@ export default function App() {
     setIsMenuOpen(false);
     setCurrentIndex(0);
     setSearchQuery('');
-    setIsSearchOpen(false);
     setIsCategoryMenuOpen(false);
+    setIsFlipped(false);
   }, [user]);
 
   // Auth Listener
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
-      setUser(currentUser);
-      if (currentUser) {
+    const unsubscribe = onAuthStateChanged(auth, async (authUser) => {
+      setUser(authUser);
+      if (authUser) {
         // Create user doc if not exists
-        const userRef = doc(db, 'users', currentUser.uid);
+        const userRef = doc(db, 'users', authUser.uid);
         try {
           const userSnap = await getDoc(userRef);
           if (!userSnap.exists()) {
             await setDoc(userRef, {
-              uid: currentUser.uid,
-              email: currentUser.email,
-              displayName: currentUser.displayName,
-              photoURL: currentUser.photoURL,
+              uid: authUser.uid,
+              email: authUser.email,
+              displayName: authUser.displayName,
+              photoURL: authUser.photoURL,
               role: 'user'
             });
           }
@@ -441,7 +696,7 @@ export default function App() {
       const batch = remainingFeeds.slice(i, i + batchSize);
       
       // Process batch in parallel
-      const batchResults = await Promise.all(batch.map(async (feed) => {
+      const batchResults = await Promise.all(batch.map(async (feed) => {  
         const items = await fetchSingleFeed(feed);
         setNewsItems(prev => {
           const existingIds = new Set(prev.map(item => item.id));
@@ -502,6 +757,7 @@ export default function App() {
     if (nextIndex >= 0 && nextIndex < displayedNews.length) {
       setDirection(newDirection);
       setCurrentIndex(nextIndex);
+      setIsFlipped(false);
     }
   };
 
@@ -643,7 +899,7 @@ export default function App() {
                     whileTap={{ scale: 0.9 }}
                     onClick={() => {
                       if (displayedNews[currentIndex]) {
-                        window.open(displayedNews[currentIndex].url, '_blank');
+                        setIsFlipped(true); // Trigger flip to show iframe
                       }
                     }}
                     className="w-12 h-12 rounded-full bg-white/5 backdrop-blur-md border border-white/5 text-white/50 flex items-center justify-center shadow-lg hover:bg-white/10 hover:text-white transition-all"
@@ -792,39 +1048,39 @@ export default function App() {
                           <AnimatePresence>
                             {isCategoryMenuOpen && (
                               <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 pointer-events-none">
-                                {CATEGORIES.map((cat, ci, arr) => {
-                                  const angle = (Math.PI / 2) + (Math.PI * (ci / (arr.length - 1))); // From 90 to 270 degrees
-                                  const radius = 125;
-                                  const x = Math.cos(angle) * radius;
-                                  const y = Math.sin(angle) * radius;
-                                  
-                                  return (
-                                    <motion.button
-                                      key={cat.id}
-                                      initial={{ x: 0, y: 0, opacity: 0, scale: 0 }}
-                                      animate={{ x, y, opacity: 1, scale: 1 }}
-                                      exit={{ x: 0, y: 0, opacity: 0, scale: 0 }}
-                                      transition={{ 
-                                        delay: ci * 0.03, 
-                                        type: 'spring', 
-                                        stiffness: 350, 
-                                        damping: 25,
-                                        mass: 0.8
-                                      }}
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        setSelectedCategory(cat.id);
-                                        setIsCategoryMenuOpen(false);
-                                        setIsMenuOpen(false);
-                                        setCurrentIndex(0);
-                                      }}
-                                      className={`absolute pointer-events-auto w-[46px] h-[46px] rounded-full flex items-center justify-center backdrop-blur-xl border border-white/20 shadow-xl transition-all group/cat ${
-                                        selectedCategory === cat.id 
-                                          ? `${cat.color} text-white` 
-                                          : 'bg-white/20 text-white/80 hover:bg-white/30 hover:text-white'
-                                      }`}
-                                      style={{ left: '50%', top: '50%', marginLeft: '-23px', marginTop: '-23px' }}
-                                    >
+                                   {CATEGORIES.map((cat, ci, arr) => {
+                                   const angle = (Math.PI / 2) + (Math.PI * (ci / (arr.length - 1))); // From 90 to 270 degrees
+                                   const radius = 200;
+                                   const x = Math.cos(angle) * radius;
+                                   const y = Math.sin(angle) * radius;
+                                   
+                                   return (
+                                     <motion.button
+                                       key={cat.id}
+                                       initial={{ x: 0, y: 0, opacity: 0, scale: 0 }}
+                                       animate={{ x, y, opacity: 1, scale: 1 }}
+                                       exit={{ x: 0, y: 0, opacity: 0, scale: 0 }}
+                                       transition={{ 
+                                         delay: ci * 0.04, 
+                                         type: 'spring', 
+                                         stiffness: 280, 
+                                         damping: 28,
+                                         mass: 0.6
+                                       }}
+                                       onClick={(e) => {
+                                         e.stopPropagation();
+                                         setSelectedCategory(cat.id);
+                                         setIsCategoryMenuOpen(false);
+                                         setIsMenuOpen(false);
+                                         setCurrentIndex(0);
+                                       }}
+                                       className={`absolute pointer-events-auto w-[52px] h-[52px] rounded-full flex items-center justify-center backdrop-blur-xl border border-white/20 shadow-xl transition-all group/cat ${
+                                         selectedCategory === cat.id 
+                                           ? `${cat.color} text-white` 
+                                           : 'bg-white/20 text-white/80 hover:bg-white/30 hover:text-white'
+                                       }`}
+                                       style={{ left: '50%', top: '50%', marginLeft: '-26px', marginTop: '-26px' }}
+                                     >
                                       <motion.div layoutId={selectedCategory === cat.id ? "active-cat-icon" : undefined}>
                                         <cat.icon className="w-[18px] h-[18px]" />
                                       </motion.div>
@@ -846,7 +1102,7 @@ export default function App() {
                             )}
                           </AnimatePresence>
                         )}
-                      </motion.div>
+                        </motion.div>
                     ))}
                   </motion.div>
                 )}
@@ -1026,153 +1282,22 @@ export default function App() {
               ) : (
                 <AnimatePresence initial={false} custom={direction} mode="popLayout">
                 {currentItem ? (
-                      <motion.div
+                      <NewsCard
                         key={currentItem.id}
-                        custom={direction}
+                        currentItem={currentItem}
+                        direction={direction}
+                        displayedNews={displayedNews}
+                        currentIndex={currentIndex}
+                        setCurrentIndex={setCurrentIndex}
+                        setDirection={setDirection}
+                        favorites={favorites}
+                        toggleFavorite={toggleFavorite}
+                        user={user}
+                        selectedCategoryData={selectedCategoryData}
                         variants={variants}
-                        initial="enter"
-                        animate="center"
-                        exit="exit"
-                        drag="x"
-                        dragConstraints={{ left: 0, right: 0 }}
-                        dragElastic={0.8}
-                        onDragEnd={(e, { offset, velocity }) => {
-                          const swipe = Math.abs(offset.x) > 50 || Math.abs(velocity.x) > 200;
-                          if (swipe) {
-                            const nextIndex = (currentIndex + (offset.x > 0 ? -1 : 1) + displayedNews.length) % displayedNews.length;
-                            setDirection(offset.x > 0 ? -1 : 1);
-                            setCurrentIndex(nextIndex);
-                          }
-                        }}
-                        transition={{
-                          x: { type: "spring", stiffness: 300, damping: 30 },
-                          opacity: { duration: 0.2 }
-                        }}
-                        className="absolute inset-0 flex flex-col cursor-grab active:cursor-grabbing preserve-3d"
-                      >
-                        <div className="absolute inset-x-0 top-0 h-[70%] z-0 bg-black overflow-hidden">
-                          {currentItem.videoUrl ? (
-                            <video
-                              src={currentItem.videoUrl}
-                              autoPlay
-                              loop
-                              muted
-                              playsInline
-                              className="w-full h-full object-cover opacity-80 scale-150 origin-top"
-                            />
-                          ) : (
-                            <div className="relative w-full h-full scale-150 origin-top">
-                              <img 
-                                src={currentItem.imageUrl} 
-                                alt={currentItem.title}
-                                referrerPolicy="no-referrer"
-                                className="absolute inset-0 w-full h-full object-cover object-top blur-2xl opacity-40 scale-110"
-                              />
-                              <img 
-                                src={currentItem.imageUrl} 
-                                alt={currentItem.title}
-                                referrerPolicy="no-referrer"
-                                className="relative w-full h-full object-contain object-top z-10"
-                              />
-                            </div>
-                          )}
-                          {/* Bottom-focused Vignette/Gradient - 80% Increased Intensity */}
-                          <div className="absolute inset-x-0 bottom-0 h-[80%] z-20 pointer-events-none bg-gradient-to-t from-black via-black/90 to-transparent opacity-100" />
-                          <div className="absolute inset-x-0 bottom-0 h-1/2 z-20 pointer-events-none bg-gradient-to-t from-black to-transparent opacity-100" />
-                          <div className="absolute inset-0 z-20 pointer-events-none shadow-[inset_0_-250px_200px_-100px_rgba(0,0,0,1)]" />
-                        </div>
-
-                      <div className="relative z-20 flex-1 flex flex-col justify-end p-8 md:p-16 pt-0 pb-28 md:pb-36 mt-0">
-                        <motion.div 
-                          initial="hidden"
-                          animate="visible"
-                          variants={{
-                            hidden: { opacity: 0 },
-                            visible: {
-                              opacity: 1,
-                              transition: {
-                                staggerChildren: 0.15,
-                                delayChildren: 0.2
-                              }
-                            }
-                          }}
-                          className="max-w-2xl space-y-4"
-                        >
-                          <div className="overflow-hidden">
-                            <h2 className="text-3xl md:text-5xl font-black text-white leading-tight tracking-tighter uppercase flex flex-wrap gap-x-3">
-                              {currentItem.title.split(' ').map((word, i) => (
-                                <motion.span
-                                  key={i}
-                                  variants={{
-                                    hidden: { y: "100%", opacity: 0, filter: 'blur(10px)' },
-                                    visible: { 
-                                      y: 0, 
-                                      opacity: 1, 
-                                      filter: 'blur(0px)',
-                                      transition: { type: "spring", stiffness: 200, damping: 20 }
-                                    }
-                                  }}
-                                  className="inline-block drop-shadow-[0_0_15px_rgba(255,255,255,0.4)]"
-                                  style={{
-                                    textShadow: '0 0 10px rgba(255,255,255,0.3), 0 0 20px rgba(255,255,255,0.2)'
-                                  }}
-                                >
-                                  {word}
-                                </motion.span>
-                              ))}
-                            </h2>
-                          </div>
-                          
-                          <motion.div
-                            variants={{
-                              hidden: { opacity: 0, x: -30 },
-                              visible: { 
-                                opacity: 1, 
-                                x: 0,
-                                transition: { duration: 0.8, ease: [0.16, 1, 0.3, 1] }
-                              }
-                            }}
-                            className="relative"
-                          >
-                            <div className="absolute left-0 top-0 bottom-0 w-1 bg-gradient-to-b from-pink-500 to-purple-600 shadow-[0_0_10px_rgba(236,72,153,0.5)]" />
-                            <p className="text-lg md:text-xl text-white/90 font-medium leading-tight pl-6 drop-shadow-md italic line-clamp-8 max-w-md">
-                              {currentItem.summary}
-                            </p>
-                          </motion.div>
-
-                          <motion.div
-                            variants={{
-                              hidden: { opacity: 0, scale: 0.8 },
-                              visible: { 
-                                opacity: 1, 
-                                scale: 1,
-                                transition: { delay: 0.6, duration: 0.4 }
-                              }
-                            }}
-                            className="flex items-center gap-4 pt-2"
-                          >
-                            <div className="flex items-center gap-2">
-                              <span className={`px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-widest border ${selectedCategoryData?.border || 'border-white/20'} ${selectedCategoryData?.color || 'bg-white/10'} text-white shadow-[0_0_15px_rgba(255,255,255,0.1)]`}>
-                                {currentItem.category}
-                              </span>
-                              {favorites[currentItem.id] && (
-                                <motion.div
-                                  initial={{ scale: 0, rotate: -45 }}
-                                  animate={{ scale: 1, rotate: 0 }}
-                                  className="w-6 h-6 rounded-full bg-pink-500 flex items-center justify-center shadow-[0_0_15px_rgba(236,72,153,0.6)]"
-                                >
-                                  <Heart className="w-3 h-3 text-white fill-white" />
-                                </motion.div>
-                              )}
-                            </div>
-                            <span className="text-[10px] font-bold text-white/40 uppercase tracking-widest">
-                              {currentItem.source} • {currentItem.time}
-                            </span>
-                          </motion.div>
-
-                        </motion.div>
-                      </div>
-                    </motion.div>
+                        isFlipped={isFlipped}
+                        setIsFlipped={setIsFlipped}
+                      />
                 ) : !showFavoritesOnly ? (
                   <div className="absolute inset-0 flex flex-col items-center justify-center bg-black p-8 text-center">
                     <motion.div
@@ -1215,9 +1340,9 @@ export default function App() {
                     >
                       Esplora Notizie
                     </button>
-                  </motion.div>
-                )}
-              </AnimatePresence>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
               )}
             </div>
           </div>
@@ -1230,6 +1355,13 @@ export default function App() {
         }
         .preserve-3d {
           transform-style: preserve-3d;
+        }
+        .scrollbar-hide::-webkit-scrollbar {
+          display: none;
+        }
+        .scrollbar-hide {
+          -ms-overflow-style: none;
+          scrollbar-width: none;
         }
       `}} />
 
@@ -1297,6 +1429,27 @@ export default function App() {
                     <p>
                       Utilizziamo esclusivamente cookie tecnici necessari al corretto funzionamento dell'app e alla memorizzazione delle tue preferenze di sessione.
                     </p>
+                  </div>
+                </section>
+
+                <section className="pt-6 border-t border-white/5">
+                  <h4 className="text-indigo-400 font-bold uppercase text-xs tracking-widest mb-6">Altre App Consigliate</h4>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <a 
+                      href="https://www.gamespulse.it" 
+                      target="_blank" 
+                      rel="noopener noreferrer"
+                      className="group relative bg-white/5 border border-white/10 rounded-2xl p-4 flex items-center gap-4 transition-all hover:bg-white/10 hover:border-indigo-500/30 active:scale-95"
+                    >
+                      <div className="w-12 h-12 rounded-xl bg-black/40 overflow-hidden flex items-center justify-center p-1 border border-white/5 group-hover:border-indigo-500/20 transition-colors">
+                        <img src="/gamespulse.png" alt="GamesPulse" className="w-full h-full object-contain" />
+                      </div>
+                      <div className="flex-1">
+                        <h5 className="text-sm font-bold text-white group-hover:text-indigo-400 transition-colors uppercase tracking-tight">GamesPulse</h5>
+                        <p className="text-[10px] text-white/40 font-medium">Daily Gaming Intel</p>
+                      </div>
+                      <ExternalLink className="w-4 h-4 text-white/20 group-hover:text-indigo-400 transition-colors" />
+                    </a>
                   </div>
                 </section>
               </div>
