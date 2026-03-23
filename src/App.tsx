@@ -128,7 +128,7 @@ const FEEDS = [
 ];
 
 const CATEGORIES = [
-  { id: 'all', label: 'Tutte', icon: Globe, color: 'bg-indigo-600', border: 'border-indigo-400/30' },
+  { id: 'all', label: 'Tutte', icon: LayoutGrid, color: 'bg-indigo-600', border: 'border-indigo-400/30' },
   { id: 'cronaca', label: 'Cronaca', icon: BookOpen, color: 'bg-slate-700', border: 'border-slate-500/30' },
   { id: 'mondo', label: 'Mondo', icon: Globe, color: 'bg-blue-500', border: 'border-blue-400/30' },
   { id: 'regioni', label: 'Regioni', icon: MapPin, color: 'bg-amber-600', border: 'border-amber-400/30' },
@@ -1042,12 +1042,14 @@ export default function App() {
                           whileTap={{ scale: 0.9 }}
                           onClick={() => { item.action(); if (item.label !== 'Categorie') setIsMenuOpen(false); }}
                           className={`w-12 h-12 rounded-full flex items-center justify-center backdrop-blur-xl border border-white/20 shadow-2xl transition-all relative ${
-                            (item.isActive) 
-                              ? 'bg-indigo-500/40 border-indigo-400/50 text-white' 
-                              : (item.label === 'Categorie' && isCategoryMenuOpen)
-                                ? `${selectedCategoryData?.color.replace('bg-', 'bg-')}/40 border-indigo-400/50 text-white`
-                                : 'bg-white/10 text-white/80 hover:bg-white/20 hover:text-white'
-                          } ${isCategoryMenuOpen && item.label !== 'Categorie' ? 'opacity-20' : 'opacity-100'}`}
+                             (item.isActive) 
+                               ? (item.label.includes('Preferiti') || item.label.includes('Tutte')) && showFavoritesOnly
+                                 ? 'bg-red-500 border-red-400 text-white shadow-[0_0_20px_rgba(239,68,68,0.4)]'
+                                 : 'bg-indigo-500/40 border-indigo-400/50 text-white' 
+                               : (item.label === 'Categorie' && isCategoryMenuOpen)
+                                 ? `bg-indigo-500/40 border-indigo-400/50 text-white`
+                                 : 'bg-white/10 text-white/80 hover:bg-white/20 hover:text-white'
+                         } ${isCategoryMenuOpen && item.label !== 'Categorie' ? 'opacity-20' : 'opacity-100'}`}
                         >
                           <motion.div layoutId={item.isActive ? "active-menu-icon" : undefined}>
                             <item.icon className={`w-5 h-5 ${item.isActive ? 'fill-current' : ''}`} />
@@ -1062,8 +1064,8 @@ export default function App() {
                             {isCategoryMenuOpen && (
                               <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 pointer-events-none">
                                    {CATEGORIES.map((cat, ci, arr) => {
-                                   const angle = (Math.PI / 2) + (Math.PI * (ci / (arr.length - 1))); // From 90 to 270 degrees
-                                   const radius = 200;
+                                   const startAngle = (Math.PI * 0.95); const endAngle = (Math.PI * 1.5); const angle = startAngle + ((endAngle - startAngle) * (ci / (arr.length - 1)));
+                                   const radius = 240;
                                    const x = Math.cos(angle) * radius;
                                    const y = Math.sin(angle) * radius;
                                    
@@ -1097,17 +1099,6 @@ export default function App() {
                                       <motion.div layoutId={selectedCategory === cat.id ? "active-cat-icon" : undefined}>
                                         <cat.icon className="w-[18px] h-[18px]" />
                                       </motion.div>
-                                      <span 
-                                        className="absolute px-2 py-0.5 text-white text-[9px] font-bold uppercase tracking-wider opacity-0 group-hover/cat:opacity-100 transition-opacity pointer-events-none whitespace-nowrap drop-shadow-[0_2px_4px_rgba(0,0,0,0.8)]"
-                                        style={{
-                                          left: x < 0 ? 'auto' : '120%',
-                                          right: x < 0 ? '120%' : 'auto',
-                                          top: '50%',
-                                          transform: 'translateY(-50%)'
-                                        }}
-                                      >
-                                        {cat.label}
-                                      </span>
                                     </motion.button>
                                   );
                                 })}
