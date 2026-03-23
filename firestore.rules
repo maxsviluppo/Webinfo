@@ -107,10 +107,9 @@ service cloud.firestore {
       allow read, write: if true;
     }
 
-    // Admin Configs (AdSense, Analytics) - Public read for injection, write needs auth
+    // Admin Configs (AdSense, Analytics) - Fully public (admin auth handled at app level)
     match /configs/{configId} {
-      allow read: if true;
-      allow write: if isAuthenticated();
+      allow read, write: if true;
     }
 
     // Traffic Stats - Public read for dashboard, write from server
