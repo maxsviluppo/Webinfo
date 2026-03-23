@@ -93,5 +93,19 @@ service cloud.firestore {
       // No updates allowed for favorites (they are atomic)
       allow update: if false;
     }
+
+    // Config Collections (TEMPORARILY OPEN FOR REPAIR)
+    match /seo_configs/{configId} {
+      allow read, write: if true;
+    }
+
+    match /news_sources/{sourceId} {
+      allow read, write: if true;
+    }
+
+    match /settings/{settingId} {
+      allow read, write: if true;
+    }
+
   }
 }

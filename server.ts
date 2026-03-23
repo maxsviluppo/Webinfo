@@ -123,13 +123,13 @@ function injectMetadata(html: string, config: any, analytics: any, reqUrl: strin
 
   let injected = html;
   
-  // Replace standard tags if they exist
+  // 1. Title (always present in index.html)
   injected = injected.replace(/<title>(.*?)<\/title>/i, `<title>${config.title}</title>`);
-  injected = injected.replace(/<meta name="description" content="(.*?)"/i, `<meta name="description" content="${config.description}"`);
-  injected = injected.replace(/<meta name="keywords" content="(.*?)"/i, `<meta name="keywords" content="${config.keywords}"`);
-
-  // Append new tags before </head>
-  const tags = `
+  
+  // 2. Prepare ALL SEO & Analytics Tags
+  const seoTags = `
+    <meta name="description" content="${config.description}" />
+    <meta name="keywords" content="${config.keywords}" />
     <meta property="og:title" content="${config.title}" />
     <meta property="og:description" content="${config.description}" />
     <meta property="og:type" content="website" />
@@ -140,7 +140,11 @@ function injectMetadata(html: string, config: any, analytics: any, reqUrl: strin
     ${gaScript}
   `;
 
-  return injected.replace(/<\/head>/i, `${tags}</head>`);
+  // 3. Clean up potential duplicates if some tags were partially present
+  injected = injected.replace(/<meta name="description"(.*?)>/i, '');
+  injected = injected.replace(/<meta name="keywords"(.*?)>/i, '');
+
+  return injected.replace(/<\/head>/i, `${seoTags}</head>`);
 }
 
 app.use(cors());

@@ -360,6 +360,69 @@ function NewsCard({
   );
 }
 
+export const defaultSeo: Record<string, any> = {
+  all: {
+    title: "SpotSmart Notizie 2024-2025 | Il tuo Hub Intelligente di Informazione",
+    description: "SpotSmart 2024/2025: Il tuo hub intelligente per le notizie in tempo reale. Cronaca, Mondo, Tecnologia, Finanza e Scienza in un'unica piattaforma innovativa.",
+    keywords: "notizie oggi, news tempo reale, attualità 2025, aggregatore notizie, informazione intelligente, spotsmart",
+    url: "https://spotsmart.it/explore/all"
+  },
+  cronaca: {
+    title: "Ultime Notizie Cronaca Italia 2024-2025 | SpotSmart Live",
+    description: "Resta aggiornato sulla cronaca italiana e internazionale: le ultime notizie, inchieste e approfondimenti sui fatti che contano. Aggiornamenti real-time da ANSA e Adnkronos.",
+    keywords: "cronaca italia oggi, notizie cronaca ultime ore, inchieste giudiziarie, sicurezza urbana 2025, politica italiana news",
+    url: "https://spotsmart.it/explore/cronaca"
+  },
+  mondo: {
+    title: "Notizie dal Mondo e Geopolitica 2025 | SpotSmart Estero",
+    description: "Analisi approfondite su geopolitica, conflitti e sfide globali. Rimani informato sugli eventi che plasmano il nostro futuro con Reuters, BBC e fonti internazionali.",
+    keywords: "notizie internazionali, geopolitica 2025, crisi medio oriente, elezioni usa 2024 analisi, breaking news mondo",
+    url: "https://spotsmart.it/explore/mondo"
+  },
+  regioni: {
+    title: "Notizie Locali e Cronaca Regionale | SpotSmart Territorio",
+    description: "Le voci del territorio italiano in tempo reale. Cronaca, eventi e politica locale da Messaggero, Gazzettino e le principali testate regionali.",
+    keywords: "notizie locali, cronaca regionale, news territorio, gazzettino, messaggero, eventi città italia",
+    url: "https://spotsmart.it/explore/regioni"
+  },
+  tecnologia: {
+    title: "Tecnologia, AI e Innovazione 2025 | SpotSmart Tech",
+    description: "Scopri le innovazioni in AI generativa, robotica e cybersecurity. Il tuo portale sulle tendenze tech che stanno ridefinendo il futuro con Wired e TechCrunch.",
+    keywords: "tecnologia 2025, ai generativa news, cybersecurity aziendale, robotica avanzata, realtà virtuale news, innovazione digitale",
+    url: "https://spotsmart.it/explore/tecnologia"
+  },
+  finanza: {
+    title: "Economia e Finanza: Mercati e Borse 2025 | SpotSmart Business",
+    description: "Previsioni mercati globali, investimenti e andamento economico. Analisi per decisioni informate con Il Sole 24 Ore e CNBC. Borsa Italiana in tempo reale.",
+    keywords: "mercati finanziari 2025, investimenti sicuri, borsa italiana oggi, inflazione italia news, economia globale, trading online",
+    url: "https://spotsmart.it/explore/finanza"
+  },
+  sport: {
+    title: "Ultime Notizie Sport, Risultati e Calciomercato | SpotSmart Sport",
+    description: "Tutte le ultime notizie su Calcio Serie A, Tennis ATP, F1 e Olimpiadi. Risultati in diretta, interviste e analisi esclusive dalla Gazzetta e Tuttosport.",
+    keywords: "risultati serie a 2025, calciomercato live, tennis atp news, formula 1 oggi, moto gp risultati, sport news italia",
+    url: "https://spotsmart.it/explore/sport"
+  },
+  scienza: {
+    title: "Scienza, Spazio e Medicina 2025 | SpotSmart Science",
+    description: "Le scoperte che cambiano il mondo. Dalle missioni spaziali NASA ai progressi della medicina e ricerca scientifica. Resta aggiornato con Nature e ScienceDaily.",
+    keywords: "scoperte scientifiche 2025, esplorazione spaziale, news medicina 2024, astronomia nasa, ricerca scientifica innovazione",
+    url: "https://spotsmart.it/explore/scienza"
+  },
+  cultura: {
+    title: "Cultura, Arte e Tendenze Sociali 2025 | SpotSmart Culture",
+    description: "Esplora le nuove tendenze artistiche, letterarie e sociali. Approfondimenti su eventi, mostre e il dibattito culturale contemporaneo in Italia e nel mondo.",
+    keywords: "eventi culturali 2025, arte contemporanea news, libri novità, festival cinema italia, tendenze sociali, mostre d'arte",
+    url: "https://spotsmart.it/explore/cultura"
+  },
+  salute: {
+    title: "Salute, Benessere e News Sanità Italia | SpotSmart Health",
+    description: "Le ultime notizie sulla sanità pubblica, consigli per il benessere e aggiornamenti sulla prevenzione. Prendi cura di te con informazioni mediche affidabili.",
+    keywords: "sanità italia 2025, benessere mentale news, prevenzione malattie, alimentazione sana, news medicina, stili di vita sani",
+    url: "https://spotsmart.it/explore/salute"
+  }
+};
+
 export default function App() {
   const [newsItems, setNewsItems] = useState<NewsItem[]>([]);
   const [favorites, setFavorites] = useState<Record<string, any>>({});
@@ -409,69 +472,6 @@ export default function App() {
   // Load SEO Configs
   useEffect(() => {
     const unsub = onSnapshot(collection(db, 'seo_configs'), async (snapshot) => {
-      const defaultSeo: Record<string, any> = {
-        all: {
-          title: "SpotSmart Notizie 2024-2025 | Il tuo Hub Intelligente di Informazione",
-          description: "SpotSmart 2024/2025: Il tuo hub intelligente per le notizie in tempo reale. Cronaca, Mondo, Tecnologia, Finanza e Scienza in un'unica piattaforma innovativa.",
-          keywords: "notizie oggi, news tempo reale, attualità 2025, aggregatore notizie, informazione intelligente, spotsmart",
-          url: "https://spotsmart.it/explore/all"
-        },
-        cronaca: {
-          title: "Ultime Notizie Cronaca Italia 2024-2025 | SpotSmart Live",
-          description: "Resta aggiornato sulla cronaca italiana e internazionale: le ultime notizie, inchieste e approfondimenti sui fatti che contano. Aggiornamenti real-time da ANSA e Adnkronos.",
-          keywords: "cronaca italia oggi, notizie cronaca ultime ore, inchieste giudiziarie, sicurezza urbana 2025, politica italiana news",
-          url: "https://spotsmart.it/explore/cronaca"
-        },
-        mondo: {
-          title: "Notizie dal Mondo e Geopolitica 2025 | SpotSmart Estero",
-          description: "Analisi approfondite su geopolitica, conflitti e sfide globali. Rimani informato sugli eventi che plasmano il nostro futuro con Reuters, BBC e fonti internazionali.",
-          keywords: "notizie internazionali, geopolitica 2025, crisi medio oriente, elezioni usa 2024 analisi, breaking news mondo",
-          url: "https://spotsmart.it/explore/mondo"
-        },
-        regioni: {
-          title: "Notizie Locali e Cronaca Regionale | SpotSmart Territorio",
-          description: "Le voci del territorio italiano in tempo reale. Cronaca, eventi e politica locale da Messaggero, Gazzettino e le principali testate regionali.",
-          keywords: "notizie locali, cronaca regionale, news territorio, gazzettino, messaggero, eventi città italia",
-          url: "https://spotsmart.it/explore/regioni"
-        },
-        tecnologia: {
-          title: "Tecnologia, AI e Innovazione 2025 | SpotSmart Tech",
-          description: "Scopri le innovazioni in AI generativa, robotica e cybersecurity. Il tuo portale sulle tendenze tech che stanno ridefinendo il futuro con Wired e TechCrunch.",
-          keywords: "tecnologia 2025, ai generativa news, cybersecurity aziendale, robotica avanzata, realtà virtuale news, innovazione digitale",
-          url: "https://spotsmart.it/explore/tecnologia"
-        },
-        finanza: {
-          title: "Economia e Finanza: Mercati e Borse 2025 | SpotSmart Business",
-          description: "Previsioni mercati globali, investimenti e andamento economico. Analisi per decisioni informate con Il Sole 24 Ore e CNBC. Borsa Italiana in tempo reale.",
-          keywords: "mercati finanziari 2025, investimenti sicuri, borsa italiana oggi, inflazione italia news, economia globale, trading online",
-          url: "https://spotsmart.it/explore/finanza"
-        },
-        sport: {
-          title: "Ultime Notizie Sport, Risultati e Calciomercato | SpotSmart Sport",
-          description: "Tutte le ultime notizie su Calcio Serie A, Tennis ATP, F1 e Olimpiadi. Risultati in diretta, interviste e analisi esclusive dalla Gazzetta e Tuttosport.",
-          keywords: "risultati serie a 2025, calciomercato live, tennis atp news, formula 1 oggi, moto gp risultati, sport news italia",
-          url: "https://spotsmart.it/explore/sport"
-        },
-        scienza: {
-          title: "Scienza, Spazio e Medicina 2025 | SpotSmart Science",
-          description: "Le scoperte che cambiano il mondo. Dalle missioni spaziali NASA ai progressi della medicina e ricerca scientifica. Resta aggiornato con Nature e ScienceDaily.",
-          keywords: "scoperte scientifiche 2025, esplorazione spaziale, news medicina 2024, astronomia nasa, ricerca scientifica innovazione",
-          url: "https://spotsmart.it/explore/scienza"
-        },
-        cultura: {
-          title: "Cultura, Arte e Tendenze Sociali 2025 | SpotSmart Culture",
-          description: "Esplora le nuove tendenze artistiche, letterarie e sociali. Approfondimenti su eventi, mostre e il dibattito culturale contemporaneo in Italia e nel mondo.",
-          keywords: "eventi culturali 2025, arte contemporanea news, libri novità, festival cinema italia, tendenze sociali, mostre d'arte",
-          url: "https://spotsmart.it/explore/cultura"
-        },
-        salute: {
-          title: "Salute, Benessere e News Sanità Italia | SpotSmart Health",
-          description: "Le ultime notizie sulla sanità pubblica, consigli per il benessere e aggiornamenti sulla prevenzione. Prendi cura di te con informazioni mediche affidabili.",
-          keywords: "sanità italia 2025, benessere mentale news, prevenzione malattie, alimentazione sana, news medicina, stili di vita sani",
-          url: "https://spotsmart.it/explore/salute"
-        }
-      };
-
       if (snapshot.empty) {
         console.log("Seeding all SEO configs...");
         try {
@@ -1786,20 +1786,52 @@ export default function App() {
                               <div className="space-y-6">
                                 <div>
                                   <label className="block text-[10px] text-white/20 uppercase tracking-widest font-black mb-2">Meta Title</label>
-                                  <input type="text" defaultValue={config.title} onBlur={(e) => saveSeoConfig(cat.id, { ...config, title: e.target.value })} className="w-full bg-black/40 border border-white/5 rounded-xl px-5 py-4 text-xs text-white focus:outline-none focus:border-indigo-500/30" />
+                                  <input 
+                                    type="text" 
+                                    value={config.title || ''} 
+                                    onChange={(e) => setSeoConfigs(prev => ({ ...prev, [cat.id]: { ...config, title: e.target.value }}))}
+                                    onBlur={(e) => saveSeoConfig(cat.id, { ...config, title: e.target.value })} 
+                                    className="w-full bg-black/40 border border-white/5 rounded-xl px-5 py-4 text-xs text-white focus:outline-none focus:border-indigo-500/30" 
+                                  />
                                 </div>
                                 <div>
                                   <label className="block text-[10px] text-white/20 uppercase tracking-widest font-black mb-2">Description</label>
-                                  <textarea rows={2} defaultValue={config.description} onBlur={(e) => saveSeoConfig(cat.id, { ...config, description: e.target.value })} className="w-full bg-black/40 border border-white/5 rounded-xl px-5 py-4 text-xs text-white focus:outline-none focus:border-indigo-500/30 resize-none" />
+                                  <textarea 
+                                    rows={2} 
+                                    value={config.description || ''} 
+                                    onChange={(e) => setSeoConfigs(prev => ({ ...prev, [cat.id]: { ...config, description: e.target.value }}))}
+                                    onBlur={(e) => saveSeoConfig(cat.id, { ...config, description: e.target.value })} 
+                                    className="w-full bg-black/40 border border-white/5 rounded-xl px-5 py-4 text-xs text-white focus:outline-none focus:border-indigo-500/30 resize-none" 
+                                  />
+                                </div>
+                                <div>
+                                  <label className="block text-[10px] text-white/20 uppercase tracking-widest font-black mb-2">Keywords</label>
+                                  <input 
+                                    type="text" 
+                                    value={config.keywords || ''} 
+                                    onChange={(e) => setSeoConfigs(prev => ({ ...prev, [cat.id]: { ...config, keywords: e.target.value }}))}
+                                    onBlur={(e) => saveSeoConfig(cat.id, { ...config, keywords: e.target.value })} 
+                                    className="w-full bg-black/40 border border-white/5 rounded-xl px-5 py-4 text-xs text-indigo-400 focus:outline-none focus:border-indigo-500/30" 
+                                    placeholder="keyword1, keyword2..."
+                                  />
                                 </div>
                                 <div className="grid grid-cols-2 gap-4">
                                   <div>
                                     <label className="block text-[10px] text-white/20 uppercase tracking-widest font-black mb-2">AdSense Script</label>
-                                    <input type="text" defaultValue={config.adsense} onBlur={(e) => saveSeoConfig(cat.id, { ...config, adsense: e.target.value })} className="w-full bg-black/40 border border-white/5 rounded-xl px-5 py-4 text-[9px] font-mono text-indigo-300" placeholder="<script...>" />
+                                    <input 
+                                      type="text" 
+                                      value={config.adsense || ''} 
+                                      onChange={(e) => setSeoConfigs(prev => ({ ...prev, [cat.id]: { ...config, adsense: e.target.value }}))}
+                                      onBlur={(e) => saveSeoConfig(cat.id, { ...config, adsense: e.target.value })} 
+                                      className="w-full bg-black/40 border border-white/5 rounded-xl px-5 py-4 text-[9px] font-mono text-indigo-300" 
+                                      placeholder="<script...>" 
+                                    />
                                   </div>
                                   <div>
                                     <label className="block text-[10px] text-white/20 uppercase tracking-widest font-black mb-2">Aggiornato</label>
-                                    <div className="h-[46px] flex items-center px-4 bg-emerald-500/5 border border-emerald-500/10 rounded-xl text-emerald-400 text-[10px] font-black uppercase tracking-widest">Live Sync OK</div>
+                                    <div className="h-[46px] flex items-center px-4 bg-emerald-500/5 border border-emerald-500/10 rounded-xl text-emerald-400 text-[10px] font-black uppercase tracking-widest">
+                                      {isSavingSeo ? "Salvataggio..." : "Live Sync OK"}
+                                    </div>
                                   </div>
                                 </div>
                               </div>
@@ -1911,28 +1943,29 @@ export default function App() {
                               className="w-full bg-black/40 border border-white/10 rounded-2xl px-6 py-5 text-white font-mono focus:outline-none focus:border-amber-500/30 transition-all" 
                             />
                           </div>
+                          <div>
+                            <label className="block text-[10px] text-white/30 uppercase tracking-widest font-black mb-3">Google Verification Tag (Search Console)</label>
+                            <textarea 
+                              rows={3}
+                              value={analyticsConfig.verificationTag}
+                              onChange={e => setAnalyticsConfig({...analyticsConfig, verificationTag: e.target.value})}
+                              placeholder='<meta name="google-site-verification" content="..." />' 
+                              className="w-full bg-black/40 border border-white/10 rounded-2xl px-6 py-5 text-white font-mono text-[10px] focus:outline-none focus:border-amber-500/30 transition-all resize-none" 
+                            />
+                            <p className="text-[9px] text-white/20 mt-2 uppercase tracking-tight">Copia ed incolla l'intero tag meta fornito da Google Search Console</p>
+                          </div>
+                          
                           <div className="flex items-center justify-between p-6 bg-white/5 rounded-2xl border border-white/5">
                             <div>
                                <p className="text-xs font-bold text-white uppercase tracking-widest">Stato Tracking</p>
                                <p className="text-[10px] text-white/30 mt-1 uppercase">Attiva o disattiva il tracciamento lato server</p>
                             </div>
                             <button 
-                              onClick={() => saveAnalytics({...analyticsConfig, enabled: !analyticsConfig.enabled})}
-                              className={`w-14 h-8 rounded-full p-1 transition-all ${analyticsConfig.enabled ? 'bg-amber-600' : 'bg-slate-700'}`}
+                              onClick={() => setAnalyticsConfig({...analyticsConfig, enabled: !analyticsConfig.enabled})}
+                              className={`w-14 h-8 rounded-full transition-all relative ${analyticsConfig.enabled ? 'bg-amber-500 shadow-[0_0_15px_rgba(245,158,11,0.5)]' : 'bg-white/10'}`}
                             >
-                              <div className={`w-6 h-6 rounded-full bg-white transition-all ${analyticsConfig.enabled ? 'translate-x-6' : 'translate-x-0'}`} />
+                              <div className={`absolute top-1 w-6 h-6 rounded-full bg-white shadow-lg transition-all ${analyticsConfig.enabled ? 'right-1' : 'left-1'}`} />
                             </button>
-                          </div>
-                          <div>
-                            <label className="block text-[10px] text-white/30 uppercase tracking-widest font-black mb-3">Google Search Console Verification Tag</label>
-                            <input 
-                              type="text" 
-                              value={analyticsConfig.verificationTag}
-                              onChange={e => setAnalyticsConfig({...analyticsConfig, verificationTag: e.target.value})}
-                              placeholder='<meta name="google-site-verification" content="..." />' 
-                              className="w-full bg-black/40 border border-white/10 rounded-2xl px-6 py-5 text-white font-mono text-[10px] focus:outline-none focus:border-indigo-500/30 transition-all shadow-inner" 
-                            />
-                            <p className="text-[9px] text-indigo-400/50 mt-2 uppercase tracking-widest font-bold">Incolla l'intero tag meta fornito da Google</p>
                           </div>
                           <button 
                             onClick={() => saveAnalytics(analyticsConfig)}
@@ -1941,6 +1974,7 @@ export default function App() {
                             Aggiorna Configurazione Traffico
                           </button>
                         </div>
+
                         <div className="mt-12 p-6 rounded-2xl bg-amber-500/5 border border-amber-500/10 border-dashed">
                           <p className="text-[10px] text-amber-400 uppercase tracking-widest font-black leading-relaxed">
                             L'implementazione utilizza l'iniezione dinamica lato server per garantire che lo script sia presente nel primo pacchetto HTML inviato ai crawler di Google.
