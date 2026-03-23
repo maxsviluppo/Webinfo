@@ -169,8 +169,10 @@ function NewsCard({
 
   const getIframeUrl = (url: string) => {
     const secureUrl = ensureHttps(url);
-    // Use a proxy ONLY for sites known to block iframes or if requested indirectly
-    // but for now, we'll use direct link plus a fallback button
+    // Explicitly proxy sites known to have strict X-Frame-Options like TGCOM24
+    if (secureUrl.includes('tgcom24') || secureUrl.includes('mediaset') || secureUrl.includes('ansa.it')) {
+       return `https://corsproxy.io/?${encodeURIComponent(secureUrl)}`;
+    }
     return secureUrl;
   };
 
@@ -687,39 +689,38 @@ export default function App() {
 
     // Return empty array if all proxies fail
     return [];
-  };
-
-  const fetchAllFeeds = async () => {
+  };  const fetchAllFeeds = async () => {
     setLoading(true);
-    setNewsItems([]); // Clear existing items on manual refresh
+    setNewsItems([]); 
     
-    // 1. First step: Load ~20-30 news items immediately (first 3 reliable feeds)
-    const initialFeeds = FEEDS.slice(0, 3);
-    const initialResults = await Promise.all(initialFeeds.map(feed => fetchSingleFeed(feed)));
+    // 1. Uniform Initial Loading: Load the FIRST feed from EACH category initially
+    const categoriesToLoad = CATEGORIES.filter(c => c.id !== 'all');
+    const firstFeedsPerCat = categoriesToLoad.map(cat => {
+      return FEEDS.find(f => f.cat === cat.label) || FEEDS[0];
+    }).filter((v, i, a) => a.findIndex(t => (t.url === v.url)) === i); // Unique feeds
+    
+    const initialResults = await Promise.all(firstFeedsPerCat.map(feed => fetchSingleFeed(feed)));
     const initialItems = initialResults.flat().sort(() => Math.random() - 0.5);
     
     setNewsItems(initialItems);
-    setLoading(false); // Stop main loading spinner after first step
+    setLoading(false);
 
     // 2. Background loading: Process remaining feeds in batches of 10
-    const remainingFeeds = FEEDS.slice(3);
+    const loadedUrls = new Set(firstFeedsPerCat.map(f => f.url));
+    const remainingFeeds = FEEDS.filter(f => !loadedUrls.has(f.url));
     const batchSize = 10;
     
     for (let i = 0; i < remainingFeeds.length; i += batchSize) {
       const batch = remainingFeeds.slice(i, i + batchSize);
-      
-      // Process batch in parallel
-      const batchResults = await Promise.all(batch.map(async (feed) => {  
+      await Promise.all(batch.map(async (feed) => {  
         const items = await fetchSingleFeed(feed);
         setNewsItems(prev => {
           const existingIds = new Set(prev.map(item => item.id));
           const newItems = items.filter(item => !existingIds.has(item.id));
           return [...prev, ...newItems].sort(() => Math.random() - 0.5);
         });
-        return items;
       }));
       
-      // Optional: small delay between batches to keep UI smooth
       if (i + batchSize < remainingFeeds.length) {
         await new Promise(resolve => setTimeout(resolve, 500));
       }
@@ -1044,7 +1045,7 @@ export default function App() {
                           className={`w-12 h-12 rounded-full flex items-center justify-center backdrop-blur-xl border border-white/20 shadow-2xl transition-all relative ${
                              (item.isActive) 
                                ? (item.label.includes('Preferiti') || item.label.includes('Tutte')) && showFavoritesOnly
-                                 ? 'bg-red-500 border-red-400 text-white shadow-[0_0_20px_rgba(239,68,68,0.4)]'
+                                 ? 'bg-red-600 border-red-500 text-white shadow-[0_0_20px_rgba(220,38,38,0.5)]'
                                  : 'bg-indigo-500/40 border-indigo-400/50 text-white' 
                                : (item.label === 'Categorie' && isCategoryMenuOpen)
                                  ? `bg-indigo-500/40 border-indigo-400/50 text-white`
@@ -1052,7 +1053,7 @@ export default function App() {
                          } ${isCategoryMenuOpen && item.label !== 'Categorie' ? 'opacity-20' : 'opacity-100'}`}
                         >
                           <motion.div layoutId={item.isActive ? "active-menu-icon" : undefined}>
-                            <item.icon className={`w-5 h-5 ${item.isActive ? 'fill-current' : ''}`} />
+                             <item.icon className={`w-5 h-5 ${item.isActive ? (item.label.includes('Preferiti') || item.label.includes('Tutte')) ? 'fill-white' : 'fill-current' : ''}`} />
                           </motion.div>
                           <span className="absolute right-full mr-4 px-3 py-1 text-white text-[10px] font-bold uppercase tracking-wider opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap drop-shadow-[0_2px_4px_rgba(0,0,0,0.8)]">
                             {item.label}
