@@ -177,8 +177,19 @@ function saveAdSense(data: any) {
   try { fs.writeFileSync(ADSENSE_FILE, JSON.stringify(data, null, 2)); } catch(e) {}
 }
 
+const DEFAULT_SOURCES = [
+  { id: "si-001", url: "https://www.ansa.it/sito/ansait_rss.xml", cat: "Cronaca", name: "ANSA" },
+  { id: "si-002", url: "https://www.tgcom24.mediaset.it/rss/homepage.xml", cat: "Cronaca", name: "TGCOM24" },
+  { id: "si-037", url: "https://www.ilsole24ore.com/rss/finanza.xml", cat: "Finanza", name: "Il Sole 24 Ore" },
+  { id: "si-024", url: "https://www.hdblog.it/feed/", cat: "Tecnologia", name: "HD Blog" },
+  { id: "si-047", url: "https://www.gazzetta.it/rss/home.xml", cat: "Sport", name: "Gazzetta" }
+];
+
 function getSources() {
-  try { return JSON.parse(fs.readFileSync(SOURCES_FILE, "utf-8")); } catch (err) { return []; }
+  try { 
+    const sources = JSON.parse(fs.readFileSync(SOURCES_FILE, "utf-8")); 
+    return (Array.isArray(sources) && sources.length > 0) ? sources : DEFAULT_SOURCES;
+  } catch (err) { return DEFAULT_SOURCES; }
 }
 function saveSources(sources: any) { fs.writeFileSync(SOURCES_FILE, JSON.stringify(sources, null, 2)); }
 
@@ -747,10 +758,9 @@ app.get("/api/news", async (req, res) => {
     const sources = getSources().filter((s: any) => s.active !== false);
     console.log(`[Unified Fetch] Gathering news from ${sources.length} active sources...`);
     
-    const feedPromises = sources.map(async (source: any) => {
+    const feedPromises = sources.slice(0, 40).map(async (source: any) => { // High-speed selection of top 40 sources
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 15000); 
-      
+      const timeoutId = setTimeout(() => controller.abort(), 5000); // Sharp 5s timeout for agility
       try {
         // Cache Buster (GP DNA): Add refresh param to force sources to bypass their own cache
         const fetchUrl = source.url + (source.url.includes('?') ? '&' : '?') + `_ss_refresh=${now}`;
@@ -770,8 +780,9 @@ app.get("/api/news", async (req, res) => {
         let rawXml = await response.text();
         const xml = cleanXmlContent(rawXml);
         const feed = await parser.parseString(xml);
+        const items = feed.items || [];
         
-        return await Promise.all(feed.items.slice(0, 25).map(async (item) => {
+        return await Promise.all(items.slice(0, 25).map(async (item) => {
           let image = extractImageUrl(item);
           let video = extractVideoUrl(item);
           
@@ -836,12 +847,14 @@ app.get("/api/news", async (req, res) => {
 
     const finalResult = [...shuffledToday, ...sortedRecent].slice(0, 800);
 
+    console.log(`[Unified Fetch] SUCCESS - Sending ${finalResult.length} items to client.`);
     serverNewsCache = finalResult;
     lastServerFetchTime = Date.now();
     res.json(finalResult);
   } catch (error) {
-    console.error("Unified RSS Fetch error:", error);
-    res.status(500).json({ error: "Failed to aggregate news feeds" });
+    console.error("FATAL Unified RSS Fetch error:", error);
+    // NEVER send 500, return cache or empty array to keep UI flowing
+    return res.json(serverNewsCache.length > 0 ? serverNewsCache : []);
   }
 });
 
