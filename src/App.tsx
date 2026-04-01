@@ -589,6 +589,8 @@ export default function App() {
   const [isSavingAdsense, setIsSavingAdsense] = useState(false);
   const [saveStatus, setSaveStatus] = useState<{type: 'success' | 'error' | 'info' | null, message: string}>({ type: null, message: '' });
   const [realTraffic, setRealTraffic] = useState<{today: number, total: number}>({ today: 0, total: 0 });
+  const [hasUpdates, setHasUpdates] = useState(false);
+  const [lastSeenId, setLastSeenId] = useState<string | null>(null);
   
   const [adminTab, setAdminTab] = useState<'seo' | 'sources' | 'analytics' | 'adsense'>('seo');
   const [newsSources, setNewsSources] = useState<any[]>([]);
@@ -1095,6 +1097,11 @@ export default function App() {
       const processedItems = (items as NewsItem[]).map(item => ({...item, rnd: Math.random()}));
       setNewsItems(processedItems);
       
+      if (processedItems.length > 0) {
+        setLastSeenId(processedItems[0].id);
+        setHasUpdates(false);
+      }
+      
       // Save top 100 to local cache for next startup
       localStorage.setItem('cachedNews', JSON.stringify(processedItems.slice(0, 100)));
     } catch (e) {
@@ -1104,11 +1111,41 @@ export default function App() {
     }
   };
 
+  // Fail-Safe: Never stay in loading for more than 12 seconds
   useEffect(() => {
-    if (newsSources.length > 0) {
-      fetchAllFeeds();
+    if (loading) {
+      const timer = setTimeout(() => {
+        console.warn("[Loading] Fail-safe triggered after 12s");
+        setLoading(false);
+      }, 12000);
+      return () => clearTimeout(timer);
     }
-  }, [newsSources]);
+  }, [loading]);
+
+  useEffect(() => {
+    // Trigger initial load immediately and when sources update
+    fetchAllFeeds();
+  }, [newsSources?.length]);
+
+  // Background Update Checker (GamesPulse DNA)
+  useEffect(() => {
+    const checkUpdates = async () => {
+      if (loading || !lastSeenId) return;
+      try {
+        const response = await fetch('/api/news');
+        if (response.ok) {
+          const items = await response.json();
+          if (items.length > 0 && items[0].id !== lastSeenId) {
+            console.log("[Radar] New updates detected!");
+            setHasUpdates(true);
+          }
+        }
+      } catch (e) {}
+    };
+
+    const interval = setInterval(checkUpdates, 60000); // Every 1 minute
+    return () => clearInterval(interval);
+  }, [lastSeenId, loading]);
 
   // Sync first 50 news items to localStorage for instant startup next time
   useEffect(() => {
@@ -1328,6 +1365,27 @@ export default function App() {
             <AnimatePresence>
               {!isMenuOpen && (
                 <div className="flex items-center gap-3">
+                  <AnimatePresence>
+                    {hasUpdates && (
+                      <motion.button
+                        initial={{ opacity: 0, scale: 0, x: 20 }}
+                        animate={{ opacity: 1, scale: 1, x: 0 }}
+                        exit={{ opacity: 0, scale: 0, x: 20 }}
+                        whileHover={{ scale: 1.1 }}
+                        whileTap={{ scale: 0.9 }}
+                        onClick={() => fetchAllFeeds(true)}
+                        className="w-12 h-12 rounded-full bg-amber-500 border border-amber-400/50 flex items-center justify-center text-white shadow-[0_0_20px_rgba(245,158,11,0.4)] z-[110] relative group"
+                        title="Nuove Notizie Disponibili"
+                      >
+                         <RefreshCw className="w-5 h-5" />
+                         <span className="absolute -top-1 -right-1 w-4 h-4 bg-red-600 border-2 border-slate-900 rounded-full animate-bounce" />
+                         <div className="absolute right-full mr-4 px-3 py-1 bg-amber-500 text-[10px] text-white rounded-lg opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity whitespace-nowrap uppercase tracking-widest font-black shadow-lg">
+                            Nuovi Aggiornamenti
+                         </div>
+                      </motion.button>
+                    )}
+                  </AnimatePresence>
+
                   {/* Admin Shield Trigger */}
                   <motion.button 
                     initial={{ opacity: 0, x: 20, scale: 0.5 }}
